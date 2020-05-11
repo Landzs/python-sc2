@@ -29,3 +29,12 @@ mini_games/
 # Code coverage
 .coverage
 /htmlcov
+
+# VS Code file
+.env
+.code-workspace
+/env
+
+# Other ai
+/other_ai
+
