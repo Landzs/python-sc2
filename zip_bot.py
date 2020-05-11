@@ -5,9 +5,9 @@ import os
 
 def zip_folder(dirname):
     # Iterate over all the files in directory
-    for folderName, filenames in os.walk(dirname):
+    for folderName, subfolders, filenames in os.walk(dirname):
         for filename in filenames:
-            # create complete filepath of file in directory
+            #create complete filepath of file in directory
             filePath = os.path.join(folderName, filename)
             # Add file to zip
             zip_file.write(filePath)
