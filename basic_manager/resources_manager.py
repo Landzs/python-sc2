@@ -10,8 +10,10 @@ class TerranResourcesManager:
     """
 
     def __init__(self, bot=None, priority_manager=None):
-        self.bot = bot
+        self.bot              = bot
         self.priority_manager = priority_manager
+        self.workers_limit    = 66
+        self.resource_ratio   = 100
 
     async def manage_resources(self, iteration):
         """
@@ -21,9 +23,10 @@ class TerranResourcesManager:
         parm: iteration
         """
         if iteration % 10 == 0:
-            await self.distribute_workers(self.bot.resource_ratio)
+            await self.distribute_workers(self.resource_ratio)
+
         await self.build_workers()
-        await self.build_refineries()
+        await self.build_refinery()
         await self.build_base()
         await self.build_orbital()
         await self.manage_orbital()
@@ -35,7 +38,7 @@ class TerranResourcesManager:
             if (
                 self.bot.can_afford(UnitTypeId.SCV)
                 and self.bot.supply_left > 0
-                and self.bot.supply_workers <= self.bot.workers_limit
+                and self.bot.supply_workers <= self.workers_limit
             ):
                 for th in self.bot.townhalls.ready.idle:
                     if self.bot.can_afford(UnitTypeId.SCV):
@@ -52,7 +55,7 @@ class TerranResourcesManager:
             ):
                 await self.bot.expand_now()
 
-    async def build_refineries(self):
+    async def build_refinery(self):
         if not self.bot.priority_manager.check_block(
             inspect.currentframe().f_code.co_name
         ):
@@ -61,21 +64,22 @@ class TerranResourcesManager:
                 for vg in vgs:
                     if (
                         (await self.bot.can_place(
-                            UnitTypeId.REFINERY, [vg.position]))[0]
+                            UnitTypeId.REFINERY,
+                            [vg.position]))[0]
                         and self.bot.can_afford(UnitTypeId.REFINERY)
                     ):
                         worker = self.bot.select_build_worker(vg)
                         if worker:
                             worker.build(UnitTypeId.REFINERY, vg)
-                            self.bot.priority_manager.block("build_refineries")
+                            self.bot.priority_manager.block("build_refinery")
                             break
 
     async def build_orbital(self):
         if not self.bot.priority_manager.check_block(
             inspect.currentframe().f_code.co_name
         ):
-            if self.bot.tech_requirement_progress(
-                    UnitTypeId.ORBITALCOMMAND) == 1:
+            req = self.bot.tech_requirement_progress(UnitTypeId.ORBITALCOMMAND)
+            if req == 1:
                 for cc in self.bot.townhalls(UnitTypeId.COMMANDCENTER).idle:
                     if self.bot.can_afford(UnitTypeId.ORBITALCOMMAND):
                         cc(AbilityId.UPGRADETOORBITAL_ORBITALCOMMAND)
@@ -125,8 +129,8 @@ class TerranResourcesManager:
             for gas_place in gas_buildings
         )
 
-        mule_efficiency = self.bot.units(
-            UnitTypeId.MULE).amount * mineral_per_mule
+        mule_amount = self.bot.units(UnitTypeId.MULE).amount
+        mule_efficiency = mule_amount * mineral_per_mule
 
         mineral_efficiency += mule_efficiency
 
@@ -309,9 +313,8 @@ class TerranResourcesManager:
                         for worker in local_workers[:worker_to_swtitch]
                     ]
                     workers_to_adjust -= worker_to_swtitch
-
         already_adjusted = 3 * self.bot.already_pending(UnitTypeId.REFINERY)
         if (workers_to_adjust - already_adjusted) > 0:
-            self.bot.priority_manager.allow("build_refineries")
+            self.bot.priority_manager.allow("build_refinery")
         else:
-            self.bot.priority_manager.block("build_refineries")
+            self.bot.priority_manager.block("build_refinery")
