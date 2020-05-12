@@ -32,7 +32,7 @@ mini_games/
 
 # VS Code file
 .env
-.code-workspace
+*.code-workspace
 /env
 
 # Other ai

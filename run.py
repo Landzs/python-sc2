@@ -1,4 +1,5 @@
-import sc2, sys
+import sc2
+import sys
 from __init__ import run_ladder_game
 from sc2 import Race, Difficulty
 from sc2.player import Bot, Computer
@@ -9,10 +10,7 @@ from os.path import isfile, join
 import random
 
 # Load bot
-import bot
 from bot.reaper_rush import ReaperRushBot
-
-
 
 bot = Bot(Race.Terran, ReaperRushBot())
 
@@ -31,4 +29,12 @@ if __name__ == "__main__":
     else:
         # Local game
         print("Starting local game...")
-        sc2.run_game(sc2.maps.get(map), [bot, Computer(Race.Protoss, Difficulty.Easy)], realtime=True)
+        sc2.run_game(
+            sc2.maps.get(map),
+            [
+                bot, Computer(
+                    Race.Protoss, Difficulty.Easy
+                )
+            ],
+            realtime=True
+        )

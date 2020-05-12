@@ -27,6 +27,10 @@ coverage = "*"
 codecov = "*"
 matplotlib = "*"
 loguru = "*"
+flake8 = "*"
+pycodestyle = "*"
+yapf = "*"
+autopep8 = "*"
 
 [requires]
 python_version = "3.7"
