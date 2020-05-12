@@ -313,6 +313,7 @@ class TerranResourcesManager:
                         for worker in local_workers[:worker_to_swtitch]
                     ]
                     workers_to_adjust -= worker_to_swtitch
+
         already_adjusted = 3 * self.bot.already_pending(UnitTypeId.REFINERY)
         if (workers_to_adjust - already_adjusted) > 0:
             self.bot.priority_manager.allow("build_refinery")

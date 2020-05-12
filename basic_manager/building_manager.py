@@ -80,27 +80,17 @@ class TerranBuildingManager():
                 and self.bot.can_afford(UnitTypeId.BARRACKS)
             ):
                 proxyrax_position = self.bot.barrack_proxyrax_position
-                workers_proxyrax = [
-                    worker
-                    for worker in self.bot.units(UnitTypeId.SCV).filter(
-                        lambda worker: worker in self.bot.workers_proxyrax
-                    )
-                    if (
-                        not worker.is_constructing_scv
-                        and worker.distance_to(proxyrax_position) < 75
-                    )
-                ]
                 worker = next(
                     (
                         worker
                         for worker in self.bot.units(UnitTypeId.SCV).filter(
-                                    lambda worker: worker in self.bot.workers_proxyrax
-                                )
-                                if (
-                                    not worker.is_constructing_scv
-                                    and worker.distance_to(proxyrax_position) < 75
-                                )
-                    ), 
+                            lambda worker: worker in self.bot.workers_proxyrax
+                        )
+                            if (
+                                not worker.is_constructing_scv
+                                and worker.distance_to(proxyrax_position) < 75
+                            )
+                    ),
                     None
                 )
                 barrack_position = await self.bot.find_placement(
