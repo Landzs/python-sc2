@@ -8,7 +8,7 @@ class TerranMacroControlManager():
 
     def __init__(self, bot=None):
         self.bot            = bot
-        self.attack_target  = self.bot.enemy_start_locations[0]
+        self.attack_target  = []
         self.amount_marines = 15
         self.amount_reapers = 5
 

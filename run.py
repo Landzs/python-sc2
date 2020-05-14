@@ -33,7 +33,8 @@ if __name__ == "__main__":
             sc2.maps.get(map),
             [
                 bot, Computer(
-                    Race.Protoss, Difficulty.Easy
+                    Race.Protoss, 
+                    Difficulty.Easy
                 )
             ],
             realtime=True

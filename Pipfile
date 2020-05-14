@@ -31,6 +31,7 @@ flake8 = "*"
 pycodestyle = "*"
 yapf = "*"
 autopep8 = "*"
+pylint = "*"
 
 [requires]
 python_version = "3.7"

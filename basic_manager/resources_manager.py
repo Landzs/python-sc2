@@ -6,7 +6,7 @@ from sc2.ids.ability_id import AbilityId
 
 class TerranResourcesManager:
     """
-    - Basic resources Management for Terran
+    - Basic resources management for Terran
     """
 
     def __init__(self, bot=None, priority_manager=None):
