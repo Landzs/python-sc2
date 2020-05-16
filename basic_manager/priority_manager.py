@@ -4,7 +4,7 @@ from sc2.ids.unit_typeid import UnitTypeId
 
 class TerranPriorityManager():
     """
-    - Basic management control for Terran
+    - Basic priority management for Terran
     """
 
     def __init__(self, bot=None):
@@ -41,13 +41,13 @@ class TerranPriorityManager():
         ):
             self.allow_all_build()
 
-    def initialize(self):
+    def initialize(self, block_list=["build_refinery"]):
         self.generate_name_table(self.bot.resources_manager)
         self.generate_name_table(self.bot.building_manager)
         self.generate_name_table(self.bot.production_manager)
         self.block_table        = np.full(np.size(self.name_table), False)
         self.block_helper_table = np.full(np.size(self.name_table), False)
-        self.block("build_refinery")
+        [self.block(s) for s in block_list]
 
     def generate_name_table(self, manager):
         function_list = [

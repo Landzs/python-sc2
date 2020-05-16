@@ -22,6 +22,7 @@ class TerranResourcesManager:
 
         parm: iteration
         """
+        
         if iteration % 10 == 0:
             await self.distribute_workers(self.resource_ratio)
 

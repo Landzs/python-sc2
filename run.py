@@ -14,10 +14,13 @@ from bot.reaper_rush import ReaperRushBot
 
 bot = Bot(Race.Terran, ReaperRushBot())
 
-map_dir = r"C:\Software\Blizzard App\Blizzard Games\StarCraft II\Maps"
-maps = [map for map in listdir(map_dir) if isfile(join(map_dir, map))]
-maps = [os.path.splitext(map)[0] for map in maps]
-map = random.choice(maps)
+
+def get_map():
+    map_dir = r"C:\Software\Blizzard App\Blizzard Games\StarCraft II\Maps"
+    maps = [map for map in listdir(map_dir) if isfile(join(map_dir, map))]
+    maps = [os.path.splitext(map)[0] for map in maps]
+    return random.choice(maps)
+
 
 # Start game
 if __name__ == "__main__":
@@ -29,11 +32,12 @@ if __name__ == "__main__":
     else:
         # Local game
         print("Starting local game...")
+        map = get_map()
         sc2.run_game(
             sc2.maps.get(map),
             [
                 bot, Computer(
-                    Race.Protoss, 
+                    Race.Zerg,
                     Difficulty.Easy
                 )
             ],
