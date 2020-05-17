@@ -14,6 +14,12 @@ from bot.reaper_rush import ReaperRushBot
 
 bot = Bot(Race.Terran, ReaperRushBot())
 
+difficulties = [
+    Difficulty.Medium, Difficulty.MediumHard,
+    Difficulty.Hard, Difficulty.Harder, Difficulty.VeryHard,
+    Difficulty.CheatVision, Difficulty.CheatMoney, Difficulty.CheatInsane
+]
+
 
 def get_map():
     map_dir = r"C:\Software\Blizzard App\Blizzard Games\StarCraft II\Maps"
@@ -38,7 +44,7 @@ if __name__ == "__main__":
             [
                 bot, Computer(
                     Race.Zerg,
-                    Difficulty.Easy
+                    Difficulty.CheatInsane
                 )
             ],
             realtime=True
