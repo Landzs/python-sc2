@@ -49,17 +49,19 @@ class TerranBuildingManager():
         if not self.bot.priority_manager.check_block(
             inspect.currentframe().f_code.co_name
         ):
-            rdy_amt = self.bot.structures(UnitTypeId.BARRACKS).ready.amount
-            pdg_amt = self.bot.already_pending(UnitTypeId.BARRACKS)
             if (
                 self.bot.tech_requirement_progress(UnitTypeId.BARRACKS) == 1
                 and self.bot.townhalls.ready.exists
-                and rdy_amt + pdg_amt < self.barracks_limit
+                and (
+                    self.bot.structures(UnitTypeId.BARRACKS).ready.amount
+                    + self.bot.already_pending(UnitTypeId.BARRACKS)
+                    <= self.barracks_limit
+                    )
                 and self.bot.can_afford(UnitTypeId.BARRACKS)
             ):
-                townhall = self.bot.townhalls.ready[-1]
+                townhall = self.bot.townhalls.ready[-1].position
                 barrack_position = await self.bot.find_placement(
-                    UnitTypeId.SUPPLYDEPOT,
+                    UnitTypeId.BARRACKS,
                     near=townhall,
                     min_distance=7
                 )
@@ -71,12 +73,14 @@ class TerranBuildingManager():
         if not self.bot.priority_manager.check_block(
             inspect.currentframe().f_code.co_name
         ):
-            rdy_amt = self.bot.structures(UnitTypeId.BARRACKS).ready.amount
-            pdg_amt = self.bot.already_pending(UnitTypeId.BARRACKS)
             if (
                 self.bot.tech_requirement_progress(UnitTypeId.BARRACKS) == 1
                 and self.bot.townhalls.ready.exists
-                and rdy_amt + pdg_amt < self.barracks_limit
+                and (
+                    self.bot.structures(UnitTypeId.BARRACKS).ready.amount
+                    + self.bot.already_pending(UnitTypeId.BARRACKS)
+                    <= self.barracks_limit
+                )
                 and self.bot.can_afford(UnitTypeId.BARRACKS)
             ):
                 proxyrax_position = self.bot.barrack_proxyrax_position

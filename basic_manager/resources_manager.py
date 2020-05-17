@@ -22,7 +22,7 @@ class TerranResourcesManager:
 
         parm: iteration
         """
-        
+
         if iteration % 10 == 0:
             await self.distribute_workers(self.resource_ratio)
 
@@ -100,7 +100,7 @@ class TerranResourcesManager:
         needed to be adjusted
         - Number of workers needed to be adjusted is the worker's number
         needed to be switch to gas or mineral to reach the resource_ratio
-        - When workers_to_adjust is positive, it means we need send workers
+        - When workers_to_transfer is positive, it means we need send workers
         to gas. When negative, send workers to mineral
 
         param: resource_ratio
@@ -114,7 +114,7 @@ class TerranResourcesManager:
 
         townhalls         = self.bot.townhalls.ready
         gas_buildings     = self.bot.gas_buildings.ready
-        workers_to_adjust = 0
+        workers_to_transfer = 0
 
         mineral_efficiency = sum(
             min(mineral_place.assigned_harvesters,
@@ -135,12 +135,12 @@ class TerranResourcesManager:
 
         mineral_efficiency += mule_efficiency
 
-        workers_to_adjust = round(
+        workers_to_transfer = round(
             (mineral_efficiency - resource_ratio * gas_efficiency)
             / (mineral_per_worker + resource_ratio * gas_per_worker)
         )
 
-        return [mineral_efficiency, gas_efficiency, workers_to_adjust]
+        return [mineral_efficiency, gas_efficiency, workers_to_transfer]
 
     async def distribute_workers(self, resource_ratio: float = 3):
         """
@@ -266,57 +266,66 @@ class TerranResourcesManager:
                 pass
 
         # distribute worker based on resource ratio
-        workers_to_adjust = self.harvesting_efficiency(resource_ratio)[2]
-        potential_places = gas_buildings if workers_to_adjust >= 0 else bases
-        surplus_mining_places = [
-            sp
-            for sp in potential_places
-            if sp.surplus_harvesters != 0
-        ]
+        if deficit_mining_places:
+            workers_to_transfer = self.harvesting_efficiency(resource_ratio)[2]
+            if workers_to_transfer >= 0:
+                potential_places = gas_buildings
+            else:
+                potential_places = bases
+            surplus_mining_places = [
+                sp
+                for sp in potential_places
+                if sp.surplus_harvesters != 0
+            ]
 
-        for sp in surplus_mining_places:
-            if workers_to_adjust != 0:
-                difference = sp.surplus_harvesters
-                if not sp.has_vespene:
-                    local_workers = self.bot.workers.filter(
-                        lambda unit: unit.order_target == sp.tag
-                        or (
-                            unit.is_carrying_vespene
-                            and unit.order_target == bases.closest_to(sp).tag
+            for sp in surplus_mining_places:
+                if workers_to_transfer != 0:
+                    difference = sp.surplus_harvesters
+                    if not sp.has_vespene:
+                        local_workers = self.bot.workers.filter(
+                            lambda w: w.order_target == sp.tag
+                            or (
+                                w.is_carrying_vespene
+                                and w.order_target == bases.closest_to(sp).tag
+                            )
                         )
-                    )
-                    worker_to_swtitch = min(
-                        -difference, -workers_to_adjust, local_workers.amount
-                    )
-                    [
-                        worker.gather(sp)
-                        for worker in local_workers[:worker_to_swtitch]
-                    ]
-                    workers_to_adjust -= difference
-                else:
-                    local_minerals_tags = {
-                        mineral.tag
-                        for mineral in self.bot.mineral_field
-                        if mineral.distance_to(sp) <= 8
-                    }
-                    local_workers = self.bot.workers.filter(
-                        lambda unit: unit.order_target in local_minerals_tags
-                        or (
-                            unit.is_carrying_minerals
-                            and unit.order_target == sp.tag
+                        workers_tansfer = min(
+                            -difference,
+                            -workers_to_transfer,
+                            local_workers.amount
                         )
-                    )
-                    worker_to_swtitch = min(
-                        -difference, workers_to_adjust, local_workers.amount
-                    )
-                    [
-                        worker.gather(sp)
-                        for worker in local_workers[:worker_to_swtitch]
-                    ]
-                    workers_to_adjust -= worker_to_swtitch
+                        [
+                            w.gather(sp)
+                            for w in local_workers[:workers_tansfer]
+                        ]
+                        workers_to_transfer -= workers_tansfer
+                    else:
+                        local_minerals_tags = {
+                            mineral.tag
+                            for mineral in self.bot.mineral_field
+                            if mineral.distance_to(sp) <= 8
+                        }
+                        local_workers = self.bot.workers.filter(
+                            lambda w: w.order_target in local_minerals_tags
+                            or (
+                                w.is_carrying_minerals
+                                and w.order_target == sp.tag
+                            )
+                        )
+                        workers_tansfer = min(
+                            -difference,
+                            workers_to_transfer,
+                            local_workers.amount
+                        )
+                        [
+                            w.gather(sp)
+                            for w in local_workers[:workers_tansfer]
+                        ]
+                        workers_to_transfer -= workers_tansfer
 
-        already_adjusted = 3 * self.bot.already_pending(UnitTypeId.REFINERY)
-        if (workers_to_adjust - already_adjusted) > 0:
-            self.bot.priority_manager.allow("build_refinery")
-        else:
-            self.bot.priority_manager.block("build_refinery")
+            pending_refinery = self.bot.already_pending(UnitTypeId.REFINERY)
+            already_adjusted = 3 * pending_refinery
+            if (workers_to_transfer - already_adjusted) > 0:
+                self.bot.priority_manager.allow("build_refinery")
+            else:
+                self.bot.priority_manager.block("build_refinery")

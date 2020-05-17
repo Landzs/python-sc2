@@ -20,9 +20,9 @@ class TerranMicroControlManager():
 
         await self.reapers_micro_control()
 
-    def neighbors4(self, position, distance=1):
-        p = position
-        d = distance
+    def neighbors4(self, unit_position, search_distance=1):
+        p = unit_position
+        d = search_distance
         return {
             Point2((p.x - d, p.y)),
             Point2((p.x + d, p.y)),
@@ -30,9 +30,9 @@ class TerranMicroControlManager():
             Point2((p.x, p.y + d)),
         }
 
-    def neighbors8(self, position, distance=1):
-        p = position
-        d = distance
+    def neighbors8(self, unit_position, search_distance=1):
+        p = unit_position
+        d = search_distance
         return self.neighbors4(p, d) | {
             Point2((p.x - d, p.y - d)),
             Point2((p.x - d, p.y + d)),
@@ -64,17 +64,15 @@ class TerranMicroControlManager():
     async def reapers_micro_control(self):
         enemies = self.bot.enemy_units | self.bot.enemy_structures
         enemies_can_attack = enemies.filter(
-            lambda unit: unit.can_attack_ground
+            lambda u: u.can_attack_ground
         )
 
-        for r in self.bot.units(UnitTypeId.REAPER).filter(
-            lambda r: r in self.bot.macro_control_manager.reapers
-        ):
+        for r in self.bot.units(UnitTypeId.REAPER):
             close_enemies = enemies_can_attack.filter(
-                lambda unit: unit.distance_to(unit) < 10
+                lambda u: u.distance_to(u) < 10
             )
 
-            # Reaper's health is too low, retreat
+            # reaper's health is too low, retreat
             if r.health_percentage < 2 / 5:
                 if close_enemies:
                     self.retreat(r, 4, close_enemies)
@@ -85,16 +83,16 @@ class TerranMicroControlManager():
             ):
                 r.hold_position()
 
-            # Throw grenade to furthest enemy in range 5
+            # throw grenade to furthest enemy in range 5
             grenade_range = self.bot._game_data.abilities[
                 AbilityId.KD8CHARGE_KD8CHARGE.value
             ]._proto.cast_range
             ground_enemies = enemies_can_attack.filter(
-                lambda unit:
-                not unit.is_structure
-                and not unit.is_flying
-                and unit.type_id not in {UnitTypeId.LARVA, UnitTypeId.EGG}
-                and unit.distance_to(r) < grenade_range
+                lambda u:
+                not u.is_structure
+                and not u.is_flying
+                and u.type_id not in {UnitTypeId.LARVA, UnitTypeId.EGG}
+                and u.distance_to(r) < grenade_range
             )
             if (
                 grenade_range
@@ -121,25 +119,25 @@ class TerranMicroControlManager():
                     r(AbilityId.KD8CHARGE_KD8CHARGE, furthest_enemy)
                     continue
 
-            # Reaper is ready to attack, shoot nearest ground unit
+            # reaper is ready to attack, shoot nearest ground unit
             ground_enemies = enemies.filter(
-                lambda unit: unit.distance_to(r) <= 5 and not unit.is_flying
+                lambda u: u.distance_to(r) <= 5 and not u.is_flying
             )
             if r.weapon_cooldown == 0 and ground_enemies:
                 focus_enemey = self.focus_enemy(r, ground_enemies)
                 r.attack(focus_enemey)
                 continue
 
-            # Move to max unit range if enemy is closer than 4
+            # move to max unit range if enemy is closer than 4
             close_enemies = enemies.filter(
-                lambda unit:
-                unit.can_attack_ground and unit.distance_to(r) <= 4.5
+                lambda u:
+                u.can_attack_ground and u.distance_to(r) <= 4.5
             )
             if r.weapon_cooldown != 0 and close_enemies:
                 self.retreat(r, 0.5, close_enemies)
                 continue
 
-            # Move to nearest enemy to keep in range of weapon
+            # move to nearest enemy to keep in range of weapon
             ground_enemies = self.bot.enemy_units.not_flying
             if ground_enemies:
                 closest_enemy = ground_enemies.closest_to(r)

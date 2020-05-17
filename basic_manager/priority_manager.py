@@ -20,24 +20,22 @@ class TerranPriorityManager():
         - Including prioritize building orbital
         """
 
-        cc_amt  = self.bot.townhalls(UnitTypeId.COMMANDCENTER).ready.amount
-        oc_pdg  = self.bot.already_pending(UnitTypeId.ORBITALCOMMAND)
-        bks_prg = self.bot.structure_type_build_progress(UnitTypeId.BARRACKS)
-        bks_amt = self.bot.structures(UnitTypeId.BARRACKS).ready.amount
-
         if (
-            cc_amt >= 1
-            and oc_pdg < cc_amt
+            self.bot.townhalls(UnitTypeId.COMMANDCENTER).ready.amount >= 1
+            and self.bot.already_pending(UnitTypeId.ORBITALCOMMAND)
+                < self.bot.townhalls(UnitTypeId.COMMANDCENTER).ready.amount
             and (
-                bks_prg > 0.75
-                or bks_amt >= 1
+                self.bot.structure_type_build_progress(
+                    UnitTypeId.BARRACKS
+                ) > 0.75
+                or self.bot.structures(UnitTypeId.BARRACKS).ready.amount >= 1
             )
         ):
             self.block_all_build_except("build_orbital")
 
         if (
             self.check_only_allow("build_orbital")
-            and oc_pdg >= 1
+            and self.bot.already_pending(UnitTypeId.ORBITALCOMMAND) >= 1
         ):
             self.allow_all_build()
 
