@@ -870,6 +870,7 @@ class BotAI(DistanceCalculation):
         building: UnitTypeId,
         near: Union[Unit, Point2],
         max_distance: int = 20,
+        min_distance: int = 2,
         random_alternative: bool = True,
         placement_step: int = 2,
     ) -> Optional[Point2]:
@@ -901,7 +902,7 @@ class BotAI(DistanceCalculation):
         if max_distance == 0:
             return None
 
-        for distance in range(placement_step, max_distance, placement_step):
+        for distance in range(min_distance, max_distance, placement_step):
             possible_positions = [
                 Point2(p).offset(near).to2
                 for p in (
