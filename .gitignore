@@ -36,9 +36,9 @@ mini_games/
 /env
 
 # Other ai
-other_ai/
+/other_ai/*
 
 # python-sc2 code 
-sc2/
-examples/
+/sc2/*
+/examples/*
 *.zip
