@@ -38,7 +38,5 @@ mini_games/
 # Other ai
 /other_ai/*
 
-# python-sc2 code 
-/sc2/*
-/examples/*
+# Zip File
 *.zip
