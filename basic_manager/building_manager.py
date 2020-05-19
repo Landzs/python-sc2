@@ -55,6 +55,7 @@ class TerranBuildingManager():
             self.bot.townhalls.ready.exists
             and self.bot.tech_requirement_progress(type_id) == 1
             and self.bot.can_afford(type_id)
+            and not self.bot.priority_manager.check_block(type_id)
             and (
                 self.bot.structures(type_id).ready.amount
                 + self.bot.already_pending(type_id)
@@ -75,62 +76,56 @@ class TerranBuildingManager():
         return position
 
     async def build_depot(self):
-        if not self.bot.priority_manager.check_block(
-            inspect.currentframe().f_code.co_name
+        if(
+            self.bot.supply_left < 4
+            and not self.bot.already_pending(UnitTypeId.SUPPLYDEPOT)
+            and self.check_available(UnitTypeId.SUPPLYDEPOT)
         ):
-            if(
-                self.bot.supply_left < 4
-                and not self.bot.already_pending(UnitTypeId.SUPPLYDEPOT)
-                and self.check_available(UnitTypeId.SUPPLYDEPOT)
+            if (
+                self.ramp_wall
+                and self.depot_ramp_positions
             ):
-                if (
-                    self.ramp_wall
-                    and self.depot_ramp_positions
-                ):
-                    depot_position = self.depot_ramp_positions.pop()
-                else:
-                    depot_position = await self.get_position_near_th(
-                        UnitTypeId.SUPPLYDEPOT
-                    )
-                worker = self.bot.select_build_worker(depot_position)
-                if worker:
-                    worker.build(UnitTypeId.SUPPLYDEPOT, depot_position)
+                depot_position = self.depot_ramp_positions.pop()
+            else:
+                depot_position = await self.get_position_near_th(
+                    UnitTypeId.SUPPLYDEPOT
+                )
+            worker = self.bot.select_build_worker(depot_position)
+            if worker:
+                worker.build(UnitTypeId.SUPPLYDEPOT, depot_position)
 
     async def build_barrack(self):
-        if not self.bot.priority_manager.check_block(
-            inspect.currentframe().f_code.co_name
-        ):
-            if self.check_available(UnitTypeId.BARRACKS):
-                if (
-                    self.ramp_middle_barrack
-                    and self.barrack_ramp_position
-                    and self.ramp_wall
-                    and not self.proxy_rax
-                ):
-                    barrack_position = self.barrack_ramp_position.pop()
-                    worker = self.bot.select_build_worker(barrack_position)
-                elif self.proxy_rax:
-                    barrack_position = await self.bot.find_placement(
-                        UnitTypeId.BARRACKS,
-                        near=self.bot.barracks_proxyrax_position
+        if self.check_available(UnitTypeId.BARRACKS):
+            if (
+                self.ramp_middle_barrack
+                and self.barrack_ramp_position
+                and self.ramp_wall
+                and not self.proxy_rax
+            ):
+                barrack_position = self.barrack_ramp_position.pop()
+                worker = self.bot.select_build_worker(barrack_position)
+            elif self.proxy_rax:
+                barrack_position = await self.bot.find_placement(
+                    UnitTypeId.BARRACKS,
+                    near=self.bot.barracks_proxyrax_position
+                )
+                worker = next(
+                    worker
+                    for worker in self.bot.units(UnitTypeId.SCV).filter(
+                        lambda worker: worker in self.bot.workers_proxyrax
                     )
-                    worker = next(
-                        worker
-                        for worker in self.bot.units(UnitTypeId.SCV).filter(
-                            lambda worker: worker in self.bot.workers_proxyrax
-                        )
-                        if (
-                            not worker.is_constructing_scv
-                            and worker.distance_to(barrack_position) < 75
-                        )
+                    if (
+                        not worker.is_constructing_scv
+                        and worker.distance_to(barrack_position) < 75
                     )
-                else:
-                    barrack_position = await self.get_position_near_th(
-                        UnitTypeId.BARRACKS
-                    )
-                    worker = self.bot.select_build_worker(barrack_position)
-                if worker:
-                    worker.build(UnitTypeId.BARRACKS, barrack_position)
+                )
+            else:
+                barrack_position = await self.get_position_near_th(
+                    UnitTypeId.BARRACKS
+                )
+                worker = self.bot.select_build_worker(barrack_position)
+            if worker:
+                worker.build(UnitTypeId.BARRACKS, barrack_position)
 
     async def manage_supplydepot(self):
         for d in self.bot.structures(UnitTypeId.SUPPLYDEPOT).ready:

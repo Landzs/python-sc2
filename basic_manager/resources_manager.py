@@ -1,4 +1,3 @@
-import inspect
 from sc2.unit import Unit
 from sc2.ids.ability_id import AbilityId
 from sc2.ids.unit_typeid import UnitTypeId
@@ -33,33 +32,27 @@ class TerranResourcesManager:
         await self.manage_orbital()
 
     async def build_workers(self):
-        if not self.bot.priority_manager.check_block(
-            inspect.currentframe().f_code.co_name
+        if (
+            not self.bot.priority_manager.check_block(UnitTypeId.SCV)
+            and self.bot.can_afford(UnitTypeId.SCV)
+            and self.bot.supply_left > 0
+            and self.bot.supply_workers <= self.workers_limit
         ):
-            if (
-                self.bot.can_afford(UnitTypeId.SCV)
-                and self.bot.supply_left > 0
-                and self.bot.supply_workers <= self.workers_limit
-            ):
-                for th in self.bot.townhalls.ready.idle:
-                    if self.bot.can_afford(UnitTypeId.SCV):
-                        th.train(UnitTypeId.SCV)
+            for th in self.bot.townhalls.ready.idle:
+                if self.bot.can_afford(UnitTypeId.SCV):
+                    th.train(UnitTypeId.SCV)
 
     async def build_base(self):
-        if not self.bot.priority_manager.check_block(
-            inspect.currentframe().f_code.co_name
+        if (
+            not self.bot.priority_manager.check_block(UnitTypeId.COMMANDCENTER)
+            and self.bot.townhalls_limit > self.bot.townhalls.amount
+            and self.bot.already_pending(UnitTypeId.COMMANDCENTER) == 0
+            and self.bot.can_afford(UnitTypeId.COMMANDCENTER)
         ):
-            if (
-                self.bot.townhalls_limit > self.bot.townhalls.amount
-                and self.bot.already_pending(UnitTypeId.COMMANDCENTER) == 0
-                and self.bot.can_afford(UnitTypeId.COMMANDCENTER)
-            ):
-                await self.bot.expand_now()
+            await self.bot.expand_now()
 
     async def build_refinery(self):
-        if not self.bot.priority_manager.check_block(
-            inspect.currentframe().f_code.co_name
-        ):
+        if not self.bot.priority_manager.check_block(UnitTypeId.REFINERY):
             for th in self.bot.townhalls.ready:
                 vespene_geyser = self.bot.vespene_geyser.closer_than(10, th)
                 for vg in vespene_geyser:
@@ -72,18 +65,23 @@ class TerranResourcesManager:
                         worker = self.bot.select_build_worker(vg)
                         if worker:
                             worker.build(UnitTypeId.REFINERY, vg)
-                            self.bot.priority_manager.block("build_refinery")
+                            self.bot.priority_manager.block(
+                                UnitTypeId.REFINERY
+                            )
                             break
 
     async def build_orbital(self):
-        if not self.bot.priority_manager.check_block(
-            inspect.currentframe().f_code.co_name
+        if (
+            not self.bot.priority_manager.check_block(
+                UnitTypeId.ORBITALCOMMAND
+            )
+            and self.bot.tech_requirement_progress(
+                UnitTypeId.ORBITALCOMMAND
+            ) == 1
         ):
-            req = self.bot.tech_requirement_progress(UnitTypeId.ORBITALCOMMAND)
-            if req == 1:
-                for cc in self.bot.townhalls(UnitTypeId.COMMANDCENTER).idle:
-                    if self.bot.can_afford(UnitTypeId.ORBITALCOMMAND):
-                        cc(AbilityId.UPGRADETOORBITAL_ORBITALCOMMAND)
+            for cc in self.bot.townhalls(UnitTypeId.COMMANDCENTER).idle:
+                if self.bot.can_afford(UnitTypeId.ORBITALCOMMAND):
+                    cc(AbilityId.UPGRADETOORBITAL_ORBITALCOMMAND)
 
     async def manage_orbital(self):
         for oc in self.bot.townhalls(UnitTypeId.ORBITALCOMMAND).filter(
@@ -296,8 +294,7 @@ class TerranResourcesManager:
                         workers_to_transfer,
                         local_workers.amount,
                     )
-                    for w in local_workers[:workers_tansfer]:
-                        w.gather(dp)
+                    [w.gather(dp) for w in local_workers[:workers_tansfer]]
                     workers_to_transfer -= workers_tansfer
                 else:
                     local_minerals_tags = {
@@ -317,13 +314,12 @@ class TerranResourcesManager:
                         workers_to_transfer,
                         local_workers.amount,
                     )
-                    for w in local_workers[:workers_tansfer]:
-                        w.gather(dp)
+                    [w.gather(dp) for w in local_workers[:workers_tansfer]]
                     workers_to_transfer -= workers_tansfer
 
         pending_refinery = self.bot.already_pending(UnitTypeId.REFINERY)
         already_transfered = 3 * pending_refinery
         if (workers_to_transfer - already_transfered) > 0:
-            self.bot.priority_manager.allow("build_refinery")
+            self.bot.priority_manager.allow(UnitTypeId.REFINERY)
         else:
-            self.bot.priority_manager.block("build_refinery")
+            self.bot.priority_manager.block(UnitTypeId.REFINERY)
