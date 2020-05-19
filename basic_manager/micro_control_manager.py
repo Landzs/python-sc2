@@ -55,11 +55,14 @@ class TerranMicroControlManager():
                 unit.move(point)
 
     def focus_enemy(self, unit, enemies_in_range):
-        target = max(
-            enemies_in_range,
-            key=lambda e: unit.calculate_dps_vs_target(e) / e.health
-        )
-        return target
+        if enemies_in_range:
+            target = min(
+                enemies_in_range,
+                key=lambda e: e.health / unit.calculate_dps_vs_target(e)
+            )
+            return target
+        else:
+            return None
 
     async def reapers_micro_control(self):
         enemies = self.bot.enemy_units | self.bot.enemy_structures
@@ -125,7 +128,8 @@ class TerranMicroControlManager():
             )
             if r.weapon_cooldown == 0 and ground_enemies:
                 focus_enemey = self.focus_enemy(r, ground_enemies)
-                r.attack(focus_enemey)
+                if focus_enemey:
+                    r.attack(focus_enemey)
                 continue
 
             # move to max unit range if enemy is closer than 4
@@ -134,7 +138,7 @@ class TerranMicroControlManager():
                 u.can_attack_ground and u.distance_to(r) <= 4.5
             )
             if r.weapon_cooldown != 0 and close_enemies:
-                self.retreat(r, 0.5, close_enemies)
+                self.retreat(r, 1, close_enemies)
                 continue
 
             # move to nearest enemy to keep in range of weapon
