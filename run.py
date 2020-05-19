@@ -44,7 +44,7 @@ if __name__ == "__main__":
             [
                 bot, Computer(
                     Race.Zerg,
-                    Difficulty.CheatInsane
+                    Difficulty.VeryHard
                 )
             ],
             realtime=True
