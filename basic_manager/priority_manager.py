@@ -20,7 +20,6 @@ class TerranPriorityManager():
         }
         self.helper_table = self.block_table.copy()
 
-
     async def manage_priority(self):
         """
         - Manage priority, call in on_step
@@ -38,7 +37,7 @@ class TerranPriorityManager():
                 or self.bot.structures(UnitTypeId.BARRACKS).ready.amount >= 1
             )
         ):
-            self.block_all_build_except(UnitTypeId.ORBITALCOMMAND)
+            self.only_allow(UnitTypeId.ORBITALCOMMAND)
 
         if (
             self.check_only_allow(UnitTypeId.ORBITALCOMMAND)
@@ -53,34 +52,35 @@ class TerranPriorityManager():
         self.block_table = self.block_table.fromkeys(self.block_table, True)
 
     def allow_all_build(self):
-        for k in self.block_table:
-            if self.helper_table[k] == True:
-                self.block_table[k] = True
-            else:
-                self.block_table[k] = False
+        self.block_table = {
+            k: (True if self.helper_table[k] == True else False)
+            for (k, v) in self.block_table.items()
+        }
 
     def block_all_build_hard(self):
         self.block_table = self.block_table.fromkeys(self.block_table, True)
 
     def allow_all_build_hard(self):
-        self.block_table.fromkeys(self.block_table, False)
+        self.block_table = self.block_table.fromkeys(self.block_table, False)
 
-    def block_all_build_except(self, id):
-        for k in self.block_table:
-            if k != id:
-                self.block_table[k] = True
+    def only_allow(self, id):
+        self.block_table = {
+            k: (True if k != id else False)
+            for (k, v) in self.block_table.items()
+        }
 
-    def allow_all_build_except(self, id):
-        for k in self.block_table:
-            if k != id:
-                self.block_table[k] = False
+    def only_block(self, id):
+        self.block_table = {
+            k: (False if k != id else True)
+            for (k, v) in self.block_table.items()
+        }
 
     def allow(self, id):
-        self.block_table [id] = False
+        self.block_table[id]  = False
         self.helper_table[id] = False
 
-    def block(self, id): 
-        self.block_table [id] = True
+    def block(self, id):
+        self.block_table[id]  = True
         self.helper_table[id] = True
 
     def check_block(self, id):

@@ -58,7 +58,8 @@ class TerranMicroControlManager():
         if enemies_in_range:
             target = min(
                 enemies_in_range,
-                key=lambda e: e.health / unit.calculate_dps_vs_target(e)
+                key=lambda e:
+                    (e.health + e.shield) / unit.calculate_dps_vs_target(e)
             )
             return target
         else:

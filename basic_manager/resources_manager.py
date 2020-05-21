@@ -8,11 +8,12 @@ class TerranResourcesManager:
     - Basic resources management for Terran
     """
 
-    def __init__(self, bot=None, priority_manager=None):
-        self.bot              = bot
-        self.priority_manager = priority_manager
-        self.workers_limit    = 66
-        self.resource_ratio   = 100
+    def __init__(self, bot=None, priority_manager=None): 
+        self.bot                  = bot
+        self.priority_manager     = priority_manager
+        self.workers_limitation   = 66
+        self.townhalls_limitation = 3
+        self.resource_ratio       = 100
 
     async def manage_resources(self, iteration):
         """
@@ -36,7 +37,7 @@ class TerranResourcesManager:
             not self.bot.priority_manager.check_block(UnitTypeId.SCV)
             and self.bot.can_afford(UnitTypeId.SCV)
             and self.bot.supply_left > 0
-            and self.bot.supply_workers <= self.workers_limit
+            and self.bot.supply_workers <= self.workers_limitation
         ):
             for th in self.bot.townhalls.ready.idle:
                 if self.bot.can_afford(UnitTypeId.SCV):
@@ -45,7 +46,7 @@ class TerranResourcesManager:
     async def build_base(self):
         if (
             not self.bot.priority_manager.check_block(UnitTypeId.COMMANDCENTER)
-            and self.bot.townhalls_limit > self.bot.townhalls.amount
+            and self.townhalls_limitation > self.bot.townhalls.amount
             and self.bot.already_pending(UnitTypeId.COMMANDCENTER) == 0
             and self.bot.can_afford(UnitTypeId.COMMANDCENTER)
         ):
