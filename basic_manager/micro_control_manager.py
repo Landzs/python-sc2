@@ -18,6 +18,7 @@ class TerranMicroControlManager():
         - Including micro control for different units
         """
 
+        await self.SCVs_micro_control()
         await self.reapers_micro_control()
 
     def neighbors4(self, unit_position, search_distance=1):
@@ -65,6 +66,33 @@ class TerranMicroControlManager():
         else:
             return None
 
+    async def SCVs_micro_control(self):
+        enemies = self.bot.enemy_units | self.bot.enemy_structures
+        if enemies:
+            for s in self.bot.units(UnitTypeId.SCV).filter(
+                lambda s: s in self.bot.macro_control_manager.SCVs
+            ):
+                # SCV is ready to attack, shoot nearest ground unit
+                enemies_to_attack = enemies.filter(
+                    lambda u: u.distance_to(s) <= 2 and not u.is_flying
+                )
+                if s.weapon_cooldown == 0 and enemies_to_attack:
+                    focus_enemey = self.focus_enemy(s, enemies_to_attack)
+                    if focus_enemey:
+                        s.attack(focus_enemey)
+                    continue
+
+            for s in self.bot.units(UnitTypeId.SCV).filter(
+                lambda s: s.is_collecting or s.is_idle
+            ):
+                enemy_to_attack = enemies.closest_to(s)
+                if (
+                    enemy_to_attack
+                    and enemy_to_attack.distance_to(s) <= 3
+                ):
+                    enemy_to_attack
+                    s.attack(enemy_to_attack)
+
     async def reapers_micro_control(self):
         enemies = self.bot.enemy_units | self.bot.enemy_structures
         enemies_can_attack = enemies.filter(
@@ -91,7 +119,7 @@ class TerranMicroControlManager():
             grenade_range = self.bot._game_data.abilities[
                 AbilityId.KD8CHARGE_KD8CHARGE.value
             ]._proto.cast_range
-            ground_enemies = enemies_can_attack.filter(
+            enemies_to_attack = enemies_can_attack.filter(
                 lambda u:
                 not u.is_structure
                 and not u.is_flying
@@ -106,11 +134,11 @@ class TerranMicroControlManager():
                 )
             ):
                 abilities = await self.bot.get_available_abilities(r)
-                ground_enemies = ground_enemies.sorted(
+                enemies_to_attack = enemies_to_attack.sorted(
                     lambda x: x.distance_to(r), reverse=True
                 )
                 furthest_enemy = None
-                for enemy in ground_enemies:
+                for enemy in enemies_to_attack:
                     if await self.bot.can_cast(
                         r,
                         AbilityId.KD8CHARGE_KD8CHARGE,
@@ -124,11 +152,11 @@ class TerranMicroControlManager():
                     continue
 
             # reaper is ready to attack, shoot nearest ground unit
-            ground_enemies = enemies.filter(
+            enemies_to_attack = enemies.filter(
                 lambda u: u.distance_to(r) <= 5 and not u.is_flying
             )
-            if r.weapon_cooldown == 0 and ground_enemies:
-                focus_enemey = self.focus_enemy(r, ground_enemies)
+            if r.weapon_cooldown == 0 and enemies_to_attack:
+                focus_enemey = self.focus_enemy(r, enemies_to_attack)
                 if focus_enemey:
                     r.attack(focus_enemey)
                 continue
@@ -143,8 +171,8 @@ class TerranMicroControlManager():
                 continue
 
             # move to nearest enemy to keep in range of weapon
-            ground_enemies = self.bot.enemy_units.not_flying
-            if ground_enemies:
-                closest_enemy = ground_enemies.closest_to(r)
+            enemies_to_attack = self.bot.enemy_units.not_flying
+            if enemies_to_attack:
+                closest_enemy = enemies_to_attack.closest_to(r)
                 r.move(closest_enemy)
                 continue

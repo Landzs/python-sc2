@@ -1,4 +1,3 @@
-import inspect
 from sc2.ids.ability_id import AbilityId
 from sc2.ids.unit_typeid import UnitTypeId
 
@@ -9,16 +8,24 @@ class TerranBuildingManager():
     """
 
     def __init__(self, bot=None):
-        self.bot                   = bot
-        self.ramp_wall             = True
-        self.ramp_middle_barrack   = True
-        self.proxy_rax             = False
-        self.amount_limitation     = {
+        self.bot                      = bot
+
+        # ramp wall parametes
+        self.ramp_wall                = True
+        self.ramp_middle_barrack      = True
+        self.depot_ramp_positions     = []
+        self.barrack_ramp_position    = []
+
+        # proxy rax parameters
+        self.proxy_barracks           = False
+        self.proxy_barracks_positions = (0, 0)
+        self.proxy_workers            = []
+
+        # buildings' amount limitations
+        self.amount_limitation        = {
             UnitTypeId.SUPPLYDEPOT: 100,
             UnitTypeId.BARRACKS   : 1,
         }
-        self.depot_ramp_positions  = []
-        self.barrack_ramp_position = []
 
     def initialize(self):
         """
@@ -29,7 +36,6 @@ class TerranBuildingManager():
         self.depot_ramp_positions.extend(
             self.bot.main_base_ramp.corner_depots
         )
-
         if self.ramp_middle_barrack:
             self.barrack_ramp_position.append(
                 self.bot.main_base_ramp.barracks_correct_placement
@@ -55,7 +61,7 @@ class TerranBuildingManager():
             self.bot.townhalls.ready.exists
             and self.bot.tech_requirement_progress(type_id) == 1
             and self.bot.can_afford(type_id)
-            and not self.bot.priority_manager.check_block(type_id)
+            and not self.bot.strategy_manager.check_block(type_id)
             and (
                 self.bot.structures(type_id).ready.amount
                 + self.bot.already_pending(type_id)
@@ -100,24 +106,34 @@ class TerranBuildingManager():
                 self.ramp_middle_barrack
                 and self.barrack_ramp_position
                 and self.ramp_wall
-                and not self.proxy_rax
+                and (
+                    not self.proxy_barracks
+                    or self.bot.macro_control_manager.worker_rush_defense
+                )
             ):
                 barrack_position = self.barrack_ramp_position.pop()
                 worker = self.bot.select_build_worker(barrack_position)
-            elif self.proxy_rax:
+            elif (
+                self.proxy_barracks
+                and self.bot.proxy_workers
+                and not self.bot.macro_control_manager.worker_rush_defense
+            ):
                 barrack_position = await self.bot.find_placement(
                     UnitTypeId.BARRACKS,
-                    near=self.bot.barracks_proxyrax_position
+                    near=self.proxy_barracks_positions
                 )
                 worker = next(
-                    worker
-                    for worker in self.bot.units(UnitTypeId.SCV).filter(
-                        lambda worker: worker in self.bot.workers_proxyrax
-                    )
-                    if (
-                        not worker.is_constructing_scv
-                        and worker.distance_to(barrack_position) < 75
-                    )
+                    (
+                        worker
+                        for worker in self.bot.units(UnitTypeId.SCV).filter(
+                            lambda worker: worker in self.bot.proxy_workers
+                        )
+                        if (
+                            not worker.is_constructing_scv
+                            and worker.distance_to(barrack_position) < 75
+                        )
+                    ),
+                    None
                 )
             else:
                 barrack_position = await self.get_position_near_th(
@@ -130,8 +146,11 @@ class TerranBuildingManager():
     async def manage_supplydepot(self):
         for d in self.bot.structures(UnitTypeId.SUPPLYDEPOT).ready:
             if (
-                self.bot.enemy_units
-                and self.bot.enemy_units.closest_distance_to(d) > 15
+                not self.bot.enemy_units
+                or (
+                    self.bot.enemy_units
+                    and self.bot.enemy_units.closest_distance_to(d) > 15
+                )
             ):
                 d(AbilityId.MORPH_SUPPLYDEPOT_LOWER)
 

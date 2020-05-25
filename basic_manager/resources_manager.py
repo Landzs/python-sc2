@@ -8,9 +8,8 @@ class TerranResourcesManager:
     - Basic resources management for Terran
     """
 
-    def __init__(self, bot=None, priority_manager=None): 
+    def __init__(self, bot=None):
         self.bot                  = bot
-        self.priority_manager     = priority_manager
         self.workers_limitation   = 66
         self.townhalls_limitation = 3
         self.resource_ratio       = 100
@@ -34,7 +33,7 @@ class TerranResourcesManager:
 
     async def build_workers(self):
         if (
-            not self.bot.priority_manager.check_block(UnitTypeId.SCV)
+            not self.bot.strategy_manager.check_block(UnitTypeId.SCV)
             and self.bot.can_afford(UnitTypeId.SCV)
             and self.bot.supply_left > 0
             and self.bot.supply_workers <= self.workers_limitation
@@ -45,7 +44,7 @@ class TerranResourcesManager:
 
     async def build_base(self):
         if (
-            not self.bot.priority_manager.check_block(UnitTypeId.COMMANDCENTER)
+            not self.bot.strategy_manager.check_block(UnitTypeId.COMMANDCENTER)
             and self.townhalls_limitation > self.bot.townhalls.amount
             and self.bot.already_pending(UnitTypeId.COMMANDCENTER) == 0
             and self.bot.can_afford(UnitTypeId.COMMANDCENTER)
@@ -53,7 +52,7 @@ class TerranResourcesManager:
             await self.bot.expand_now()
 
     async def build_refinery(self):
-        if not self.bot.priority_manager.check_block(UnitTypeId.REFINERY):
+        if not self.bot.strategy_manager.check_block(UnitTypeId.REFINERY):
             for th in self.bot.townhalls.ready:
                 vespene_geyser = self.bot.vespene_geyser.closer_than(10, th)
                 for vg in vespene_geyser:
@@ -66,14 +65,14 @@ class TerranResourcesManager:
                         worker = self.bot.select_build_worker(vg)
                         if worker:
                             worker.build(UnitTypeId.REFINERY, vg)
-                            self.bot.priority_manager.block(
+                            self.bot.strategy_manager.block(
                                 UnitTypeId.REFINERY
                             )
                             break
 
     async def build_orbital(self):
         if (
-            not self.bot.priority_manager.check_block(
+            not self.bot.strategy_manager.check_block(
                 UnitTypeId.ORBITALCOMMAND
             )
             and self.bot.tech_requirement_progress(
@@ -168,7 +167,7 @@ class TerranResourcesManager:
         worker_pool = [
             worker
             for worker in self.bot.workers.idle
-            if self.bot.workers_proxyrax.count(worker) == 0
+            if self.bot.building_manager.proxy_workers.count(worker) == 0
         ]
         deficit_mining_places = []
         current_efficiency = self.harvesting_efficiency(resource_ratio)
@@ -321,6 +320,6 @@ class TerranResourcesManager:
         pending_refinery = self.bot.already_pending(UnitTypeId.REFINERY)
         already_transfered = 3 * pending_refinery
         if (workers_to_transfer - already_transfered) > 0:
-            self.bot.priority_manager.allow(UnitTypeId.REFINERY)
+            self.bot.strategy_manager.allow(UnitTypeId.REFINERY)
         else:
-            self.bot.priority_manager.block(UnitTypeId.REFINERY)
+            self.bot.strategy_manager.block(UnitTypeId.REFINERY)

@@ -21,7 +21,7 @@ class TerranProductionManager():
         if(
             self.bot.supply_left > 0
             and self.bot.can_afford(type_id)
-            and not self.bot.priority_manager.check_block(type_id)
+            and not self.bot.strategy_manager.check_block(type_id)
         ):
             return True
         else:

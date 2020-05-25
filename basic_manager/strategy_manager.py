@@ -1,9 +1,9 @@
 from sc2.ids.unit_typeid import UnitTypeId
 
 
-class TerranPriorityManager():
+class TerranStrategyManager():
     """
-    - Basic priority management for Terran
+    - Basic strategy management for Terran
     """
 
     def __init__(self, bot=None):
@@ -20,12 +20,39 @@ class TerranPriorityManager():
         }
         self.helper_table = self.block_table.copy()
 
-    async def manage_priority(self):
-        """
-        - Manage priority, call in on_step
-        - Including prioritize building orbital
-        """
+        # phase control initializations
+        self.phase = {
+            0: 'Defense Worker Rush'
+        }
+        self.phase_number = 1
 
+    async def manage_baisc_strategy(self):
+        """
+        - Manage strategy, call in on_step
+        - Including prioritize morphing orbital command
+        """
+        await self.counter_workers_rush()
+        await self.prioritize_morph_orbital_command()
+
+    async def counter_workers_rush(self):
+        if self.bot.macro_control_manager.worker_rush_detected:
+            self.phase_number = 0
+            self.bot.resources_manager.resource_ratio = 100
+            self.block_all_build_hard()
+            self.allow(UnitTypeId.SCV)
+            self.allow(UnitTypeId.SUPPLYDEPOT)
+            self.bot.building_manager.proxy_rax = False
+            self.bot.building_manager.ramp_wall = False
+
+            if(
+                self.bot.structures(
+                    UnitTypeId.SUPPLYDEPOTLOWERED
+                ).ready.amount == 2
+            ):
+                self.allow(UnitTypeId.MARINE)
+                self.allow(UnitTypeId.BARRACKS)
+
+    async def prioritize_morph_orbital_command(self):
         if (
             self.bot.townhalls(UnitTypeId.COMMANDCENTER).ready.amount >= 1
             and self.bot.already_pending(UnitTypeId.ORBITALCOMMAND)

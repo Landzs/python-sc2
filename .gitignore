@@ -40,3 +40,6 @@ mini_games/
 
 # Zip File
 *.zip
+
+# Replay Watch file
+watch_replay.py
