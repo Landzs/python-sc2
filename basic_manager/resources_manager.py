@@ -22,9 +22,7 @@ class TerranResourcesManager:
         parm: iteration
         """
 
-        if iteration % 10 == 0:
-            await self.distribute_workers(self.resource_ratio)
-
+        await self.distribute_workers(iteration, self.resource_ratio)
         await self.build_workers()
         await self.build_refinery()
         await self.build_base()
@@ -142,7 +140,7 @@ class TerranResourcesManager:
 
         return [mineral_efficiency, gas_efficiency, workers_to_transfer]
 
-    async def distribute_workers(self, resource_ratio: float = 3):
+    async def distribute_workers(self, iteration, resource_ratio: float = 3):
         """
         - Distributes workers across all the bases taken.
         - Keyword `resource_ratio` takes a float. If the current
@@ -153,173 +151,174 @@ class TerranResourcesManager:
 
         param: resource_ratio
         """
+        if iteration % 15 == 0:
+            if (
+                not self.bot.mineral_field
+                or not self.bot.workers
+                or not self.bot.townhalls.ready
+            ):
+                return
 
-        if (
-            not self.bot.mineral_field
-            or not self.bot.workers
-            or not self.bot.townhalls.ready
-        ):
-            return
-
-        bases = self.bot.townhalls.ready
-        gas_buildings = self.bot.gas_buildings.ready
-        mining_places = bases | gas_buildings
-        worker_pool = [
-            worker
-            for worker in self.bot.workers.idle
-            if self.bot.building_manager.proxy_workers.count(worker) == 0
-        ]
-        deficit_mining_places = []
-        current_efficiency = self.harvesting_efficiency(resource_ratio)
-        current_resource_ratio = (
-            current_efficiency[0]
-            / current_efficiency[1]
-        )
-
-        # distribute worker from surplus mining places to deficit place
-        surplus_mining_places = [
-            sp
-            for sp in mining_places
-            if sp.surplus_harvesters != 0
-        ]
-        for sp in surplus_mining_places:
-            difference = sp.surplus_harvesters
-            if sp.has_vespene:
-                local_workers = self.bot.workers.filter(
-                    lambda unit: unit.order_target == sp.tag
-                    or (
-                        unit.is_carrying_vespene
-                        and unit.order_target == bases.closest_to(sp).tag
-                    )
-                )
-            else:
-                local_minerals_tags = {
-                    mineral.tag
-                    for mineral in self.bot.mineral_field
-                    if mineral.distance_to(sp) <= 8
-                }
-                local_workers = self.bot.workers.filter(
-                    lambda unit: unit.order_target in local_minerals_tags
-                    or (
-                        unit.is_carrying_minerals
-                        and unit.order_target == sp.tag
-                    )
-                )
-            if difference > 0:
-                worker_pool += local_workers[:difference]
-            else:
-                deficit_mining_places += [sp for _ in range(-difference)]
-
-        if len(worker_pool) > len(deficit_mining_places):
-            all_minerals_near_base = [
-                mineral
-                for mineral in self.bot.mineral_field
-                if any(
-                    mineral.distance_to(base) <= 8
-                    for base in self.bot.townhalls.ready
-                )
+            bases = self.bot.townhalls.ready
+            gas_buildings = self.bot.gas_buildings.ready
+            mining_places = bases | gas_buildings
+            worker_pool = [
+                worker
+                for worker in self.bot.workers.idle
+                if self.bot.building_manager.proxy_workers.count(worker) == 0
             ]
+            deficit_mining_places = []
+            current_efficiency = self.harvesting_efficiency(resource_ratio)
+            current_resource_ratio = (
+                current_efficiency[0]
+                / current_efficiency[1]
+            )
 
-        for worker in worker_pool:
-            if deficit_mining_places:
-                if current_resource_ratio < resource_ratio:
-                    possible_mining_places = [
-                        place
-                        for place in deficit_mining_places
-                        if not place.vespene_contents
-                    ]
-                else:
-                    possible_mining_places = [
-                        place
-                        for place in deficit_mining_places
-                        if place.vespene_contents
-                    ]
-                if not possible_mining_places:
-                    possible_mining_places = deficit_mining_places
-                current_place = min(
-                    deficit_mining_places,
-                    key=lambda place: place.distance_to(worker)
-                )
-                deficit_mining_places.remove(current_place)
-                if current_place.vespene_contents:
-                    worker.gather(current_place)
-                else:
-                    local_minerals = (
-                        mineral
-                        for mineral in self.bot.mineral_field
-                        if mineral.distance_to(current_place) <= 8
-                    )
-                    target_mineral = max(
-                        local_minerals,
-                        key=lambda mineral: mineral.mineral_contents,
-                        default=None,
-                    )
-                    if target_mineral:
-                        worker.gather(target_mineral)
-            elif worker.is_idle and all_minerals_near_base:
-                target_mineral = min(
-                    all_minerals_near_base,
-                    key=lambda mineral: mineral.distance_to(worker),
-                )
-                worker.gather(target_mineral)
-            else:
-                pass
-
-        # distribute worker based on resource ratio
-        workers_to_transfer = self.harvesting_efficiency(resource_ratio)[2]
-        if workers_to_transfer >= 0:
-            potential_places = gas_buildings
-        else:
-            workers_to_transfer = -workers_to_transfer
-            potential_places = bases
-        deficit_mining_places = [
-            dp
-            for dp in potential_places
-            if dp.surplus_harvesters < 0
-        ]
-
-        for dp in deficit_mining_places:
-            if workers_to_transfer != 0:
-                difference = dp.surplus_harvesters
-                if not dp.has_vespene:
+            # distribute worker from surplus mining places to deficit place
+            surplus_mining_places = [
+                sp
+                for sp in mining_places
+                if sp.surplus_harvesters != 0
+            ]
+            for sp in surplus_mining_places:
+                difference = sp.surplus_harvesters
+                if sp.has_vespene:
                     local_workers = self.bot.workers.filter(
-                        lambda w: w.order_target == dp.tag
+                        lambda unit: unit.order_target == sp.tag
                         or (
-                            w.is_carrying_vespene
-                            and w.order_target == bases.closest_to(dp).tag
+                            unit.is_carrying_vespene
+                            and unit.order_target == bases.closest_to(sp).tag
                         )
                     )
-                    workers_tansfer = min(
-                        -difference,
-                        workers_to_transfer,
-                        local_workers.amount,
-                    )
-                    [w.gather(dp) for w in local_workers[:workers_tansfer]]
-                    workers_to_transfer -= workers_tansfer
                 else:
                     local_minerals_tags = {
                         mineral.tag
                         for mineral in self.bot.mineral_field
-                        if mineral.distance_to(dp) <= 8
+                        if mineral.distance_to(sp) <= 8
                     }
                     local_workers = self.bot.workers.filter(
-                        lambda w: w.order_target in local_minerals_tags
+                        lambda unit: unit.order_target in local_minerals_tags
                         or (
-                            w.is_carrying_minerals
-                            and w.order_target == dp.tag
+                            unit.is_carrying_minerals
+                            and unit.order_target == sp.tag
                         )
                     )
-                    workers_tansfer = min(
-                        -difference,
-                        workers_to_transfer,
-                        local_workers.amount,
-                    )
-                    [w.gather(dp) for w in local_workers[:workers_tansfer]]
-                    workers_to_transfer -= workers_tansfer
+                if difference > 0:
+                    worker_pool += local_workers[:difference]
+                else:
+                    deficit_mining_places += [sp for _ in range(-difference)]
 
-        pending_refinery = self.bot.already_pending(UnitTypeId.REFINERY)
-        already_transfered = 3 * pending_refinery
-        if (workers_to_transfer - already_transfered) > 0:
-            self.bot.strategy_manager.allow(UnitTypeId.REFINERY)
-        else:
-            self.bot.strategy_manager.block(UnitTypeId.REFINERY)
+            if len(worker_pool) > len(deficit_mining_places):
+                all_minerals_near_base = [
+                    mineral
+                    for mineral in self.bot.mineral_field
+                    if any(
+                        mineral.distance_to(base) <= 8
+                        for base in self.bot.townhalls.ready
+                    )
+                ]
+
+            for worker in worker_pool:
+                if deficit_mining_places:
+                    if current_resource_ratio < resource_ratio:
+                        possible_mining_places = [
+                            place
+                            for place in deficit_mining_places
+                            if not place.vespene_contents
+                        ]
+                    else:
+                        possible_mining_places = [
+                            place
+                            for place in deficit_mining_places
+                            if place.vespene_contents
+                        ]
+                    if not possible_mining_places:
+                        possible_mining_places = deficit_mining_places
+                    current_place = min(
+                        deficit_mining_places,
+                        key=lambda place: place.distance_to(worker)
+                    )
+                    deficit_mining_places.remove(current_place)
+                    if current_place.vespene_contents:
+                        worker.gather(current_place)
+                    else:
+                        local_minerals = (
+                            mineral
+                            for mineral in self.bot.mineral_field
+                            if mineral.distance_to(current_place) <= 8
+                        )
+                        target_mineral = max(
+                            local_minerals,
+                            key=lambda mineral: mineral.mineral_contents,
+                            default=None,
+                        )
+                        if target_mineral:
+                            worker.gather(target_mineral)
+                elif worker.is_idle and all_minerals_near_base:
+                    target_mineral = min(
+                        all_minerals_near_base,
+                        key=lambda mineral: mineral.distance_to(worker),
+                    )
+                    worker.gather(target_mineral)
+                else:
+                    pass
+
+        # distribute worker based on resource ratio
+        if iteration % 10:
+            workers_to_transfer = self.harvesting_efficiency(resource_ratio)[2]
+            if workers_to_transfer >= 0:
+                potential_places = gas_buildings
+            else:
+                workers_to_transfer = -workers_to_transfer
+                potential_places = bases
+            deficit_mining_places = [
+                dp
+                for dp in potential_places
+                if dp.surplus_harvesters < 0
+            ]
+
+            for dp in deficit_mining_places:
+                if workers_to_transfer != 0:
+                    difference = dp.surplus_harvesters
+                    if not dp.has_vespene:
+                        local_workers = self.bot.workers.filter(
+                            lambda w: w.order_target == dp.tag
+                            or (
+                                w.is_carrying_vespene
+                                and w.order_target == bases.closest_to(dp).tag
+                            )
+                        )
+                        workers_tansfer = min(
+                            -difference,
+                            workers_to_transfer,
+                            local_workers.amount,
+                        )
+                        [w.gather(dp) for w in local_workers[:workers_tansfer]]
+                        workers_to_transfer -= workers_tansfer
+                    else:
+                        local_minerals_tags = {
+                            mineral.tag
+                            for mineral in self.bot.mineral_field
+                            if mineral.distance_to(dp) <= 8
+                        }
+                        local_workers = self.bot.workers.filter(
+                            lambda w: w.order_target in local_minerals_tags
+                            or (
+                                w.is_carrying_minerals
+                                and w.order_target == dp.tag
+                            )
+                        )
+                        workers_tansfer = min(
+                            -difference,
+                            workers_to_transfer,
+                            local_workers.amount,
+                        )
+                        [w.gather(dp) for w in local_workers[:workers_tansfer]]
+                        workers_to_transfer -= workers_tansfer
+
+            pending_refinery = self.bot.already_pending(UnitTypeId.REFINERY)
+            already_transfered = 3 * pending_refinery
+            if (workers_to_transfer - already_transfered) > 0:
+                self.bot.strategy_manager.allow(UnitTypeId.REFINERY)
+            else:
+                self.bot.strategy_manager.block(UnitTypeId.REFINERY)

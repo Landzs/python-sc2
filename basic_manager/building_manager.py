@@ -49,7 +49,7 @@ class TerranBuildingManager():
         """
         - Manage building, call in on_step
         - Including build Terran building
-        - Can be proxy rax for some buildings
+        - Some buildings can be proxy rax
         """
 
         await self.build_depot()
@@ -72,7 +72,7 @@ class TerranBuildingManager():
         else:
             return False
 
-    async def get_position_near_th(self, type_id):
+    async def get_position_near_townhall(self, type_id):
         townhall = self.bot.townhalls[-1].position
         position = await self.bot.find_placement(
             type_id,
@@ -93,7 +93,7 @@ class TerranBuildingManager():
             ):
                 depot_position = self.depot_ramp_positions.pop()
             else:
-                depot_position = await self.get_position_near_th(
+                depot_position = await self.get_position_near_townhall(
                     UnitTypeId.SUPPLYDEPOT
                 )
             worker = self.bot.select_build_worker(depot_position)
@@ -115,7 +115,8 @@ class TerranBuildingManager():
                 worker = self.bot.select_build_worker(barrack_position)
             elif (
                 self.proxy_barracks
-                and self.bot.proxy_workers
+                and self.proxy_workers
+                and self.proxy_barracks_positions != (0, 0)
                 and not self.bot.macro_control_manager.worker_rush_defense
             ):
                 barrack_position = await self.bot.find_placement(
@@ -126,7 +127,7 @@ class TerranBuildingManager():
                     (
                         worker
                         for worker in self.bot.units(UnitTypeId.SCV).filter(
-                            lambda worker: worker in self.bot.proxy_workers
+                            lambda worker: worker in self.proxy_workers
                         )
                         if (
                             not worker.is_constructing_scv
@@ -136,7 +137,7 @@ class TerranBuildingManager():
                     None
                 )
             else:
-                barrack_position = await self.get_position_near_th(
+                barrack_position = await self.get_position_near_townhall(
                     UnitTypeId.BARRACKS
                 )
                 worker = self.bot.select_build_worker(barrack_position)

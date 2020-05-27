@@ -10,7 +10,7 @@ class TerranMicroControlManager():
     """
 
     def __init__(self, bot=None):
-        self.bot            = bot
+        self.bot = bot
 
     async def manage_micro_control(self):
         """

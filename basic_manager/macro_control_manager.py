@@ -8,27 +8,36 @@ class TerranMacroControlManager():
     """
 
     def __init__(self, bot=None):
-        self.bot                 = bot
-        self.worker_rush_defense = False
-        self.worker_rush_detected  = False
-        self.SCVs   : Units      = []
-        self.marines: Units      = []
-        self.reapers: Units      = []
-        self.standby_position    = (0, 0)
-        self.attack_target       = (0, 0)
-        self.amount_marines      = 1
-        self.amount_reapers      = 1
-        self.worker_typeid = [
+        self.bot                  = bot
+
+        # worker rush defense parameters
+        self.worker_rush_defense  = False
+        self.worker_rush_detected = False
+
+        # units
+        self.SCVs   : Units       = []
+        self.marines: Units       = []
+        self.reapers: Units       = []
+        self.unit_attack_amount   = {
+            UnitTypeId.MARINE: 1,
+            UnitTypeId.REAPER: 1,
+        }
+        self.worker_typeid        = [
             UnitTypeId.SCV,
             UnitTypeId.PROBE,
             UnitTypeId.DRONE
         ]
+
+        # position parameters
+        self.standby_position     = (0, 0)
+        self.attack_target        = (0, 0)
 
     async def manage_macro_control(self):
         """
         - Manage macro unit control management, call in on_step
         - Including when and where to attack for different units
         """
+
         await self.enemies_monitor()
         await self.workers_control()
         await self.marines_control()
@@ -39,7 +48,7 @@ class TerranMacroControlManager():
         - Initialize macro unit control paramenters
         - Need map info so should be called once in on_step
         """
-        pass
+
         if self.attack_target == (0, 0):
             self.attack_target = self.bot.enemy_start_locations[0]
 
@@ -58,7 +67,6 @@ class TerranMacroControlManager():
             closest_distance = min(
                 [enemies_units.closest_distance_to(t)for t in townhalls]
             )
-
         else:
             closest_distance = 1000
 
@@ -97,7 +105,7 @@ class TerranMacroControlManager():
 
     async def marines_control(self):
         marines = self.bot.units(UnitTypeId.MARINE).idle
-        if marines.amount >= self.amount_marines:
+        if marines.amount >= self.unit_attack_amount[UnitTypeId.MARINE]:
             self.marines += marines
             [m.attack(self.attack_target) for m in marines]
 
@@ -105,6 +113,6 @@ class TerranMacroControlManager():
         reapers = self.bot.units(UnitTypeId.REAPER).idle.filter(
             lambda r: r.health_percentage > 4 / 5
         )
-        if reapers.amount >= self.amount_reapers:
+        if reapers.amount >= self.unit_attack_amount[UnitTypeId.REAPER]:
             self.reapers += reapers
             [r.attack(self.attack_target) for r in reapers]

@@ -31,6 +31,7 @@ class TerranStrategyManager():
         - Manage strategy, call in on_step
         - Including prioritize morphing orbital command
         """
+
         await self.counter_workers_rush()
         await self.prioritize_morph_orbital_command()
 
