@@ -25,6 +25,8 @@ class TerranBuildingManager():
         self.amount_limitation        = {
             UnitTypeId.SUPPLYDEPOT: 100,
             UnitTypeId.BARRACKS   : 1,
+            UnitTypeId.FACTORY    : 1,
+            UnitTypeId.STARPORT   : 1,
         }
 
     def initialize(self):
@@ -54,6 +56,8 @@ class TerranBuildingManager():
 
         await self.build_depot()
         await self.build_barrack()
+        await self.build_factory()
+        await self.build_starport()
         await self.manage_supplydepot()
 
     def check_available(self, type_id):
@@ -125,13 +129,13 @@ class TerranBuildingManager():
                 )
                 worker = next(
                     (
-                        worker
-                        for worker in self.bot.units(UnitTypeId.SCV).filter(
-                            lambda worker: worker in self.proxy_workers
+                        w
+                        for w in self.bot.units(UnitTypeId.SCV).filter(
+                            lambda w: w in self.proxy_workers
                         )
                         if (
-                            not worker.is_constructing_scv
-                            and worker.distance_to(barrack_position) < 75
+                            not w.is_constructing_scv
+                            and w.distance_to(barrack_position) < 75
                         )
                     ),
                     None
@@ -144,6 +148,24 @@ class TerranBuildingManager():
             if worker:
                 worker.build(UnitTypeId.BARRACKS, barrack_position)
 
+    async def build_factory(self):
+        if self.check_available(UnitTypeId.FACTORY):
+            factory_position = await self.get_position_near_townhall(
+                UnitTypeId.FACTORY
+            )
+            worker = self.bot.select_build_worker(factory_position)
+            if worker:
+                worker.build(UnitTypeId.FACTORY, factory_position)
+
+    async def build_starport(self):
+        if self.check_available(UnitTypeId.STARPORT):
+            starport_position = await self.get_position_near_townhall(
+                UnitTypeId.STARPORT
+            )
+            worker = self.bot.select_build_worker(starport_position)
+            if worker:
+                worker.build(UnitTypeId.STARPORT, starport_position)
+
     async def manage_supplydepot(self):
         for d in self.bot.structures(UnitTypeId.SUPPLYDEPOT).ready:
             if (
@@ -152,6 +174,7 @@ class TerranBuildingManager():
                     self.bot.enemy_units
                     and self.bot.enemy_units.closest_distance_to(d) > 15
                 )
+                or self.bot.macro_control_manager.worker_rush_detected
             ):
                 d(AbilityId.MORPH_SUPPLYDEPOT_LOWER)
 
@@ -159,5 +182,6 @@ class TerranBuildingManager():
             if (
                 self.bot.enemy_units
                 and self.bot.enemy_units.closest_distance_to(d) < 10
+                and not self.bot.macro_control_manager.worker_rush_detected
             ):
                 d(AbilityId.MORPH_SUPPLYDEPOT_RAISE)

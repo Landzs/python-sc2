@@ -14,6 +14,8 @@ class TerranStrategyManager():
             UnitTypeId.REAPER        : False,
             UnitTypeId.SUPPLYDEPOT   : False,
             UnitTypeId.BARRACKS      : False,
+            UnitTypeId.FACTORY       : False,
+            UnitTypeId.STARPORT      : False,
             UnitTypeId.COMMANDCENTER : False,
             UnitTypeId.REFINERY      : False,
             UnitTypeId.ORBITALCOMMAND: False,
@@ -22,7 +24,8 @@ class TerranStrategyManager():
 
         # phase control initializations
         self.phase = {
-            0: 'Defense Worker Rush'
+            0: 'Defense Worker Rush',
+            100: 'Searching Remain enemies'
         }
         self.phase_number = 1
 
@@ -34,24 +37,26 @@ class TerranStrategyManager():
 
         await self.counter_workers_rush()
         await self.prioritize_morph_orbital_command()
+        await self.search_remain_enemies()
 
     async def counter_workers_rush(self):
-        if self.bot.macro_control_manager.worker_rush_detected:
+        if (
+            self.bot.macro_control_manager.worker_rush_detected
+            and self.phase_number != 0
+        ):
             self.phase_number = 0
-            self.bot.resources_manager.resource_ratio = 100
+            self.bot.resources_manager.resource_ratio    = 100
             self.block_all_build_hard()
             self.allow(UnitTypeId.SCV)
             self.allow(UnitTypeId.SUPPLYDEPOT)
-            self.bot.building_manager.proxy_rax = False
-            self.bot.building_manager.ramp_wall = False
-
-            if(
-                self.bot.structures(
-                    UnitTypeId.SUPPLYDEPOTLOWERED
-                ).ready.amount == 2
-            ):
-                self.allow(UnitTypeId.MARINE)
-                self.allow(UnitTypeId.BARRACKS)
+            self.allow(UnitTypeId.MARINE)
+            self.allow(UnitTypeId.BARRACKS)
+            self.bot.building_manager.amount_limitation[
+                UnitTypeId.BARRACKS
+            ] = 1
+            self.bot.building_manager.proxy_workers = []
+            self.bot.building_manager.proxy_rax          = False
+            self.bot.building_manager.ramp_wall          = False
 
     async def prioritize_morph_orbital_command(self):
         if (
@@ -64,6 +69,7 @@ class TerranStrategyManager():
                 ) > 0.75
                 or self.bot.structures(UnitTypeId.BARRACKS).ready.amount >= 1
             )
+            and self.phase_number != 0
         ):
             self.only_allow(UnitTypeId.ORBITALCOMMAND)
 
@@ -72,6 +78,16 @@ class TerranStrategyManager():
             and self.bot.already_pending(UnitTypeId.ORBITALCOMMAND) >= 1
         ):
             self.allow_all_build()
+
+    async def search_remain_enemies(self):
+        if self.bot.macro_control_manager.start_searching_phase:
+            self.phase_number = 100
+            self.allow(UnitTypeId.MARINE)
+            self.block(UnitTypeId.REAPER)
+            self.bot.macro_control_manager.unit_attack_amount = dict.fromkeys(
+                self.bot.macro_control_manager.unit_attack_amount,
+                1
+            )
 
     def initialize(self, block_list=[UnitTypeId.REFINERY]):
         [self.block(u) for u in block_list]

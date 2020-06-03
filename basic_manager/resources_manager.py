@@ -151,17 +151,19 @@ class TerranResourcesManager:
 
         param: resource_ratio
         """
-        if iteration % 15 == 0:
-            if (
-                not self.bot.mineral_field
-                or not self.bot.workers
-                or not self.bot.townhalls.ready
-            ):
-                return
 
-            bases = self.bot.townhalls.ready
-            gas_buildings = self.bot.gas_buildings.ready
-            mining_places = bases | gas_buildings
+        if (
+            not self.bot.mineral_field
+            or not self.bot.workers
+            or not self.bot.townhalls.ready
+        ):
+            return
+
+        bases = self.bot.townhalls.ready
+        gas_buildings = self.bot.gas_buildings.ready
+        mining_places = bases | gas_buildings
+
+        if iteration % 13 == 0:
             worker_pool = [
                 worker
                 for worker in self.bot.workers.idle
@@ -264,7 +266,7 @@ class TerranResourcesManager:
                     pass
 
         # distribute worker based on resource ratio
-        if iteration % 10:
+        if iteration % 17 == 0:
             workers_to_transfer = self.harvesting_efficiency(resource_ratio)[2]
             if workers_to_transfer >= 0:
                 potential_places = gas_buildings

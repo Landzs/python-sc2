@@ -19,6 +19,7 @@ class TerranMicroControlManager():
         """
 
         await self.SCVs_micro_control()
+        await self.marines_micro_control()
         await self.reapers_micro_control()
 
     def neighbors4(self, unit_position, search_distance=1):
@@ -92,6 +93,49 @@ class TerranMicroControlManager():
                 ):
                     enemy_to_attack
                     s.attack(enemy_to_attack)
+
+    async def marines_micro_control(self):
+        enemies = self.bot.enemy_units | self.bot.enemy_structures
+        enemies_can_attack = enemies.filter(
+            lambda u: u.can_attack_ground
+        )
+
+        for m in self.bot.units(UnitTypeId.MARINE):
+            close_enemies = enemies_can_attack.filter(
+                lambda u: u.distance_to(u) < 10
+            )
+
+            # marine is ready to attack, shoot nearest ground unit
+            enemies_to_attack = enemies.filter(
+                lambda u: u.distance_to(m) <= 6 and not u.is_flying
+            )
+            if m.weapon_cooldown == 0 and enemies_to_attack:
+                focus_enemey = self.focus_enemy(m, enemies_to_attack)
+                if focus_enemey:
+                    m.attack(focus_enemey)
+                continue
+
+            # move to max unit range if enemy is closer than 4
+            close_enemies = enemies.filter(
+                lambda u:
+                u.can_attack_ground and u.distance_to(m) <= 4.5
+            )
+            if m.weapon_cooldown != 0 and close_enemies:
+                self.retreat(m, 1, close_enemies)
+                continue
+
+            # move to nearest enemy to keep in range of weapon
+            enemies_to_attack = self.bot.enemy_units.not_flying
+            structures_to_attack = self.bot.enemy_structures.not_flying
+            if enemies_to_attack:
+                closest_enemy = enemies_to_attack.closest_to(m)
+                m.attack(closest_enemy.position)
+                continue
+            elif structures_to_attack:
+                closest_enemy = structures_to_attack.closest_to(m)
+                m.attack(closest_enemy.position)
+                continue
+
 
     async def reapers_micro_control(self):
         enemies = self.bot.enemy_units | self.bot.enemy_structures
@@ -172,7 +216,12 @@ class TerranMicroControlManager():
 
             # move to nearest enemy to keep in range of weapon
             enemies_to_attack = self.bot.enemy_units.not_flying
+            structures_to_attack = self.bot.enemy_structures.not_flying
             if enemies_to_attack:
                 closest_enemy = enemies_to_attack.closest_to(r)
-                r.move(closest_enemy)
+                r.attack(closest_enemy.position)
+                continue
+            elif structures_to_attack:
+                closest_enemy = structures_to_attack.closest_to(r)
+                r.attack(closest_enemy.position)
                 continue

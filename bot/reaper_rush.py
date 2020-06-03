@@ -27,17 +27,17 @@ class ReaperRushBot(sc2.BotAI):
         self.micro_control_manager = TerranMicroControlManager(self)
 
         # phase control initializations
-        self.strategy_manager.phase[1] = 'Start'
-        self.strategy_manager.phase[2] = 'Rush'
-        self.strategy_manager.phase[3] = 'Develop'
+        self.strategy_manager.phase[1]     = 'Start'
+        self.strategy_manager.phase[2]     = 'Rush'
+        self.strategy_manager.phase[3]     = 'Develop'
         self.strategy_manager.phase_number = 1
-        self.initialization_done = False
 
         # strategy_manager initializations
         self.strategy_manager.initialize(
             [
                 UnitTypeId.MARINE,
-                UnitTypeId.REFINERY
+                UnitTypeId.REFINERY,
+                UnitTypeId.FACTORY,
             ]
         )
 
@@ -55,12 +55,11 @@ class ReaperRushBot(sc2.BotAI):
         # macro_control_manager initializations
         self.macro_control_manager.amount_reapers = 1
 
-    async def on_step(self, iteration):
-        if not self.initialization_done:
-            self.building_manager.initialize()
-            self.macro_control_manager.initialize()
-            self.initialization_done = True
+    async def on_start(self):
+        self.building_manager.initialize()
+        self.macro_control_manager.initialize()
 
+    async def on_step(self, iteration):
         await self.bot_manager()
         await self.strategy_manager.manage_baisc_strategy()
         await self.resources_manager.manage_resources(iteration)
@@ -123,11 +122,10 @@ class ReaperRushBot(sc2.BotAI):
             self.proxy_workers = []
             self.building_manager.proxy_barracks = False
             if (
-                self.structures(UnitTypeId.COMMANDCENTER).ready.amount == 1
+                self.already_pending(UnitTypeId.COMMANDCENTER) == 1
             ):
                 self.strategy_manager.phase_number += 1
 
         elif phase_now == "Develop":
-            self.barrack_proxy_position = (0, 0)
             self.building_manager.amount_limitation[UnitTypeId.BARRACKS] = 8
             self.macro_control_manager.amount_reapers = 15
