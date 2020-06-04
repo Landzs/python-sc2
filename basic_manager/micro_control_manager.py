@@ -21,6 +21,7 @@ class TerranMicroControlManager():
         await self.SCVs_micro_control()
         await self.marines_micro_control()
         await self.reapers_micro_control()
+        await self.vikings_micro_control()
 
     def neighbors4(self, unit_position, search_distance=1):
         p = unit_position
@@ -125,8 +126,8 @@ class TerranMicroControlManager():
                 continue
 
             # move to nearest enemy to keep in range of weapon
-            enemies_to_attack = self.bot.enemy_units.not_flying
-            structures_to_attack = self.bot.enemy_structures.not_flying
+            enemies_to_attack = self.bot.enemy_units
+            structures_to_attack = self.bot.enemy_structures
             if enemies_to_attack:
                 closest_enemy = enemies_to_attack.closest_to(m)
                 m.attack(closest_enemy.position)
@@ -135,7 +136,6 @@ class TerranMicroControlManager():
                 closest_enemy = structures_to_attack.closest_to(m)
                 m.attack(closest_enemy.position)
                 continue
-
 
     async def reapers_micro_control(self):
         enemies = self.bot.enemy_units | self.bot.enemy_structures
@@ -224,4 +224,46 @@ class TerranMicroControlManager():
             elif structures_to_attack:
                 closest_enemy = structures_to_attack.closest_to(r)
                 r.attack(closest_enemy.position)
+                continue
+
+    async def vikings_micro_control(self):
+        enemies = self.bot.enemy_units | self.bot.enemy_structures
+        enemies_can_attack = enemies.filter(
+            lambda u: u.can_attack_air
+        )
+
+        for v in self.bot.units(UnitTypeId.VIKINGFIGHTER):
+            close_enemies = enemies_can_attack.filter(
+                lambda u: u.distance_to(u) < 15
+            )
+
+            # viking is ready to attack, shoot nearest ground unit
+            enemies_to_attack = enemies.filter(
+                lambda u: u.distance_to(v) <= 10 and u.is_flying
+            )
+            if v.weapon_cooldown == 0 and enemies_to_attack:
+                focus_enemey = self.focus_enemy(v, enemies_to_attack)
+                if focus_enemey:
+                    v.attack(focus_enemey)
+                continue
+
+            # move to max unit range if enemy is closer than 4
+            close_enemies = enemies.filter(
+                lambda u:
+                u.can_attack_ground and u.distance_to(v) <= 4.5
+            )
+            if v.weapon_cooldown != 0 and close_enemies:
+                self.retreat(v, 2, close_enemies)
+                continue
+
+            # move to nearest enemy to keep in range of weapon
+            enemies_to_attack = self.bot.enemy_units.flying
+            structures_to_attack = self.bot.enemy_structures.flying
+            if enemies_to_attack:
+                closest_enemy = enemies_to_attack.closest_to(v)
+                v.attack(closest_enemy.position)
+                continue
+            elif structures_to_attack:
+                closest_enemy = structures_to_attack.closest_to(v)
+                v.attack(closest_enemy.position)
                 continue

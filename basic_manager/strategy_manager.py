@@ -12,6 +12,7 @@ class TerranStrategyManager():
             UnitTypeId.SCV           : False,
             UnitTypeId.MARINE        : False,
             UnitTypeId.REAPER        : False,
+            UnitTypeId.VIKINGFIGHTER : False,
             UnitTypeId.SUPPLYDEPOT   : False,
             UnitTypeId.BARRACKS      : False,
             UnitTypeId.FACTORY       : False,
@@ -25,7 +26,7 @@ class TerranStrategyManager():
         # phase control initializations
         self.phase = {
             0: 'Defense Worker Rush',
-            100: 'Searching Remain enemies'
+            100: 'Searching Remain Enemies'
         }
         self.phase_number = 1
 
@@ -80,9 +81,16 @@ class TerranStrategyManager():
             self.allow_all_build()
 
     async def search_remain_enemies(self):
-        if self.bot.macro_control_manager.start_searching_phase:
+        if (
+            not self.check_only_allow(UnitTypeId.ORBITALCOMMAND)
+            and self.phase_number != 100
+            and self.bot.macro_control_manager.start_searching_phase
+        ):
             self.phase_number = 100
             self.allow(UnitTypeId.MARINE)
+            self.allow(UnitTypeId.FACTORY)
+            self.allow(UnitTypeId.STARPORT)
+            self.allow(UnitTypeId.VIKING)
             self.block(UnitTypeId.REAPER)
             self.bot.macro_control_manager.unit_attack_amount = dict.fromkeys(
                 self.bot.macro_control_manager.unit_attack_amount,

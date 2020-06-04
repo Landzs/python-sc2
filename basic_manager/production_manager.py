@@ -16,6 +16,7 @@ class TerranProductionManager():
         """
 
         await self.manage_barracks_training()
+        await self.manage_starpots_training()
 
     def check_available(self, type_id):
         if(
@@ -28,8 +29,13 @@ class TerranProductionManager():
             return False
 
     async def manage_barracks_training(self):
-        for b in self.bot.structures(UnitTypeId.BARRACKS).idle:
+        for b in self.bot.structures(UnitTypeId.BARRACKS).ready.idle:
             if self.check_available(UnitTypeId.REAPER):
                 b.build(UnitTypeId.REAPER)
             elif self.check_available(UnitTypeId.MARINE):
                 b.build(UnitTypeId.MARINE)
+
+    async def manage_starpots_training(self):
+        for s in self.bot.structures(UnitTypeId.STARPORT).ready.idle:
+            if self.check_available(UnitTypeId.VIKINGFIGHTER):
+                s.build(UnitTypeId.VIKINGFIGHTER)

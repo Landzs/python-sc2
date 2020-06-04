@@ -21,9 +21,11 @@ class TerranMacroControlManager():
         self.SCVs   : Units       = []
         self.marines: Units       = []
         self.reapers: Units       = []
+        self.vikings: Units       = []
         self.unit_attack_amount   = {
-            UnitTypeId.MARINE: 1,
-            UnitTypeId.REAPER: 1,
+            UnitTypeId.MARINE       : 1,
+            UnitTypeId.REAPER       : 1,
+            UnitTypeId.VIKINGFIGHTER: 1
         }
         self.worker_typeid        = [
             UnitTypeId.SCV,
@@ -49,6 +51,7 @@ class TerranMacroControlManager():
         await self.workers_control()
         await self.marines_control()
         await self.reapers_control()
+        await self.vikings_control()
         await self.search()
 
     def initialize(self):
@@ -150,6 +153,13 @@ class TerranMacroControlManager():
             self.marines += marines
             if self.bot.in_pathing_grid(self.attack_target):
                 [m.attack(self.attack_target) for m in marines]
+
+    async def vikings_control(self):
+        vikings = self.bot.units(UnitTypeId.VIKINGFIGHTER).idle
+        if vikings.amount >= self.unit_attack_amount[UnitTypeId.VIKINGFIGHTER]:
+            self.vikings += vikings
+            if self.attack_target != (0, 0):
+                [v.attack(self.attack_target) for v in vikings]
 
     async def reapers_control(self):
         reapers = self.bot.units(UnitTypeId.REAPER).idle.filter(
