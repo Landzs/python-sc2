@@ -57,7 +57,7 @@ class TerranMacroControlManager():
     def initialize(self):
         """
         - Initialize macro unit control paramenters
-        - Need map info so should be called once in on_step
+        - Need map info so should be called in on_start
         """
 
         if self.attack_target == (0, 0):

@@ -1,5 +1,7 @@
 from sc2.ids.ability_id import AbilityId
 from sc2.ids.unit_typeid import UnitTypeId
+from sc2.position import Point2
+from sc2.units import Units
 
 
 class TerranBuildingManager():
@@ -21,18 +23,34 @@ class TerranBuildingManager():
         self.proxy_barracks_positions = (0, 0)
         self.proxy_workers            = []
 
+        self.finding_addons_buidlings = []
+        self.landing_positions_offset = sorted(
+            (
+                Point2((x, y))
+                for x in range(-15, 15)
+                for y in range(-15, 15)
+            ),
+            key=lambda point: point.x ** 2 + point.y ** 2,
+        )
+
         # buildings' amount limitations
         self.amount_limitation        = {
-            UnitTypeId.SUPPLYDEPOT: 100,
-            UnitTypeId.BARRACKS   : 1,
-            UnitTypeId.FACTORY    : 1,
-            UnitTypeId.STARPORT   : 1,
+            UnitTypeId.SUPPLYDEPOT    : 100,
+            UnitTypeId.BARRACKS       : 1,
+            UnitTypeId.FACTORY        : 1,
+            UnitTypeId.STARPORT       : 1,
+            UnitTypeId.BARRACKSTECHLAB: 10,
+            UnitTypeId.BARRACKSREACTOR: 10,
+            UnitTypeId.FACTORYTECHLAB : 10,
+            UnitTypeId.FACTORYREACTOR : 10,
+            UnitTypeId.STARPORTTECHLAB: 10,
+            UnitTypeId.STARPORTREACTOR: 10,
         }
 
     def initialize(self):
         """
         - Initialize building paramenters
-        - Need map info so should be called once in on_step
+        - Need map info so should be called in on_start
         """
 
         self.depot_ramp_positions.extend(
@@ -58,7 +76,9 @@ class TerranBuildingManager():
         await self.build_barrack()
         await self.build_factory()
         await self.build_starport()
-        await self.manage_supplydepot()
+        await self.build_addons()
+        await self.manage_buildings_landing()
+        await self.manage_supplydepots()
 
     def check_available(self, type_id):
         if(
@@ -166,7 +186,7 @@ class TerranBuildingManager():
             if worker:
                 worker.build(UnitTypeId.STARPORT, starport_position)
 
-    async def manage_supplydepot(self):
+    async def manage_supplydepots(self):
         for d in self.bot.structures(UnitTypeId.SUPPLYDEPOT).ready:
             if (
                 not self.bot.enemy_units
@@ -185,3 +205,90 @@ class TerranBuildingManager():
                 and not self.bot.macro_control_manager.worker_rush_detected
             ):
                 d(AbilityId.MORPH_SUPPLYDEPOT_RAISE)
+
+    def get_addon_points(self, position):
+        addon_offset: Point2 = Point2((2.5, -0.5))
+        addon_position: Point2 = position + addon_offset
+        return [
+            (addon_position + Point2((x - 0.5, y - 0.5))).rounded
+            for x in range(0, 2) for y in range(0, 2)
+        ]
+
+    def build_addon(self, building, addon_type):
+        addon_points = self.get_addon_points(building.position)
+        if all(
+            self.bot.in_map_bounds(addon_point)
+            and self.bot.in_placement_grid(addon_point)
+            and self.bot.in_pathing_grid(addon_point)
+            for addon_point in addon_points
+        ):
+            building.build(addon_type)
+        else:
+            building(AbilityId.LIFT)
+            self.finding_addons_buidlings.append(building)
+
+    async def build_addons(self):
+        for b in self.bot.structures(UnitTypeId.BARRACKS).ready.idle.filter(
+            lambda b: not b.has_add_on
+        ):
+            if self.check_available(UnitTypeId.BARRACKSTECHLAB):
+                self.build_addon(b, UnitTypeId.BARRACKSTECHLAB)
+            elif self.check_available(UnitTypeId.BARRACKSREACTOR):
+                self.build_addon(b, UnitTypeId.BARRACKSREACTOR)
+
+        for f in self.bot.structures(UnitTypeId.FACTORY).ready.idle.filter(
+            lambda f: not f.has_add_on
+        ):
+            if self.check_available(UnitTypeId.FACTORYTECHLAB):
+                self.build_addon(f, UnitTypeId.FACTORYTECHLAB)
+            elif self.check_available(UnitTypeId.FACTORYREACTOR):
+                self.build_addon(f, UnitTypeId.FACTORYREACTOR)
+
+        for s in self.bot.structures(UnitTypeId.STARPORT).ready.idle.filter(
+            lambda s: not s.has_add_on
+        ):
+            if self.check_available(UnitTypeId.STARPORTTECHLAB):
+                self.build_addon(s, UnitTypeId.STARPORTTECHLAB)
+            elif self.check_available(UnitTypeId.STARPORTREACTOR):
+                self.build_addon(s, UnitTypeId.STARPORTREACTOR)
+
+    async def manage_buildings_landing(self):
+        for b in self.bot.structures(UnitTypeId.BARRACKSFLYING).filter(
+            lambda b: b in self.finding_addons_buidlings
+        ):
+            self.find_place_to_land(b, near=b.position, addon=True)
+
+        for f in self.bot.structures(UnitTypeId.FACTORYFLYING).filter(
+            lambda f: f in self.finding_addons_buidlings
+        ):
+            self.find_place_to_land(f, near=f.position, addon=True)
+
+        for s in self.bot.structures(UnitTypeId.STARPORTFLYING).filter(
+            lambda s: s in self.finding_addons_buidlings
+        ):
+            self.find_place_to_land(s, near=s.position, addon=True)
+
+    def find_place_to_land(self, building, near: Point2, addon: bool = True):
+        offset_point = Point2((-0.5, -0.5))
+        possible_land_positions = (
+            near.rounded + p + offset_point
+            for p in self.landing_positions_offset
+        )
+        for l in possible_land_positions:
+            land_points = [
+                (l + Point2((x, y))).rounded
+                for x in range(-1, 2)
+                for y in range(-1, 2)
+            ]
+
+            if addon:
+                land_points += self.get_addon_points(l)
+            if all(
+                self.bot.in_map_bounds(p)
+                and self.bot.in_placement_grid(p)
+                and self.bot.in_pathing_grid(p)
+                for p in land_points
+            ):
+                building(AbilityId.LAND, l)
+                self.finding_addons_buidlings.remove(building)
+                break

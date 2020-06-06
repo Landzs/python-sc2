@@ -9,17 +9,23 @@ class TerranStrategyManager():
     def __init__(self, bot=None):
         self.bot         = bot
         self.block_table = {
-            UnitTypeId.SCV           : False,
-            UnitTypeId.MARINE        : False,
-            UnitTypeId.REAPER        : False,
-            UnitTypeId.VIKINGFIGHTER : False,
-            UnitTypeId.SUPPLYDEPOT   : False,
-            UnitTypeId.BARRACKS      : False,
-            UnitTypeId.FACTORY       : False,
-            UnitTypeId.STARPORT      : False,
-            UnitTypeId.COMMANDCENTER : False,
-            UnitTypeId.REFINERY      : False,
-            UnitTypeId.ORBITALCOMMAND: False,
+            UnitTypeId.SCV            : False,
+            UnitTypeId.MARINE         : False,
+            UnitTypeId.REAPER         : False,
+            UnitTypeId.VIKINGFIGHTER  : False,
+            UnitTypeId.SUPPLYDEPOT    : False,
+            UnitTypeId.BARRACKS       : False,
+            UnitTypeId.FACTORY        : False,
+            UnitTypeId.STARPORT       : False,
+            UnitTypeId.COMMANDCENTER  : False,
+            UnitTypeId.REFINERY       : False,
+            UnitTypeId.ORBITALCOMMAND : False,
+            UnitTypeId.BARRACKSTECHLAB: False,
+            UnitTypeId.BARRACKSREACTOR: False,
+            UnitTypeId.FACTORYTECHLAB : False,
+            UnitTypeId.FACTORYREACTOR : False,
+            UnitTypeId.STARPORTTECHLAB: False,
+            UnitTypeId.STARPORTREACTOR: False,
         }
         self.helper_table = self.block_table.copy()
 
