@@ -38,6 +38,6 @@ class ExpandBot(sc2.BotAI):
                 and position
             ):
                 worker.build(UnitTypeId.COMMANDCENTER, position)
-        # for th in self.townhalls.ready.idle:
-        #     if th.health_percentage < 0.7:
-        #         th(AbilityId.LIFT)
+        for th in self.townhalls.ready.idle:
+            if th.health_percentage < 0.9:
+                th(AbilityId.LIFT)
