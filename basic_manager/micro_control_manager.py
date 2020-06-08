@@ -90,10 +90,18 @@ class TerranMicroControlManager():
                 enemy_to_attack = enemies.closest_to(s)
                 if (
                     enemy_to_attack
-                    and enemy_to_attack.distance_to(s) <= 2
+                    and enemy_to_attack.distance_to(s) <= 1
                 ):
-                    enemy_to_attack
                     s.attack(enemy_to_attack)
+
+            for s in self.bot.units(UnitTypeId.SCV).filter(
+                lambda s:
+                    s.is_attacking
+                    and s.distance_to(self.bot.start_location) >= 20
+                    and s not in self.bot.building_manager.proxy_workers
+                    and s not in self.bot.macro_control_manager.SCVs
+            ):
+                s.move(self.bot.start_location)
 
     async def marines_micro_control(self):
         enemies = self.bot.enemy_units | self.bot.enemy_structures
