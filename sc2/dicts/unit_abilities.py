@@ -105,7 +105,7 @@ UNIT_ABILITIES: Dict[UnitTypeId, Set[AbilityId]] = {
         AbilityId.STOP_STOP,
     },
     UnitTypeId.BARRACKSTECHLAB: {
-        AbilityId.BARRACKSTECHLABRESEARCH_STIMPACK,
+        AbilityId.RESEARCH_STIMPACK,
         AbilityId.RESEARCH_COMBATSHIELD,
         AbilityId.RESEARCH_CONCUSSIVESHELLS,
     },
@@ -1166,7 +1166,7 @@ UNIT_ABILITIES: Dict[UnitTypeId, Set[AbilityId]] = {
         AbilityId.STOP_STOP,
     },
     UnitTypeId.TECHLAB: {
-        AbilityId.BARRACKSTECHLABRESEARCH_STIMPACK,
+        AbilityId.RESEARCH_STIMPACK,
         AbilityId.RESEARCH_BANSHEECLOAKINGFIELD,
         AbilityId.RESEARCH_COMBATSHIELD,
         AbilityId.RESEARCH_CONCUSSIVESHELLS,

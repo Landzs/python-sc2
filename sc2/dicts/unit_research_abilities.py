@@ -51,7 +51,7 @@ RESEARCH_INFO: Dict[UnitTypeId, Dict[UpgradeId, Dict[str, Union[AbilityId, bool,
     UnitTypeId.BARRACKSTECHLAB: {
         UpgradeId.PUNISHERGRENADES: {"ability": AbilityId.RESEARCH_CONCUSSIVESHELLS},
         UpgradeId.SHIELDWALL: {"ability": AbilityId.RESEARCH_COMBATSHIELD},
-        UpgradeId.STIMPACK: {"ability": AbilityId.BARRACKSTECHLABRESEARCH_STIMPACK},
+        UpgradeId.STIMPACK: {"ability": AbilityId.RESEARCH_STIMPACK},
     },
     UnitTypeId.CYBERNETICSCORE: {
         UpgradeId.PROTOSSAIRARMORSLEVEL1: {
