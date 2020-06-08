@@ -90,7 +90,7 @@ class TerranMicroControlManager():
                 enemy_to_attack = enemies.closest_to(s)
                 if (
                     enemy_to_attack
-                    and enemy_to_attack.distance_to(s) <= 3
+                    and enemy_to_attack.distance_to(s) <= 2
                 ):
                     enemy_to_attack
                     s.attack(enemy_to_attack)

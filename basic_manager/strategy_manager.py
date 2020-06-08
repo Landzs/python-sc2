@@ -1,4 +1,6 @@
 from sc2.ids.unit_typeid import UnitTypeId
+from sc2.ids.upgrade_id import UpgradeId
+from sc2.ids.ability_id import AbilityId
 
 
 class TerranStrategyManager():
@@ -11,7 +13,9 @@ class TerranStrategyManager():
         self.block_table = {
             UnitTypeId.SCV            : False,
             UnitTypeId.MARINE         : False,
+            UnitTypeId.MARAUDER       : False,
             UnitTypeId.REAPER         : False,
+            UnitTypeId.MEDIVAC        : False,
             UnitTypeId.VIKINGFIGHTER  : False,
             UnitTypeId.SUPPLYDEPOT    : False,
             UnitTypeId.BARRACKS       : False,
@@ -26,6 +30,10 @@ class TerranStrategyManager():
             UnitTypeId.FACTORYREACTOR : False,
             UnitTypeId.STARPORTTECHLAB: False,
             UnitTypeId.STARPORTREACTOR: False,
+            UpgradeId.STIMPACK        : False,
+            UpgradeId.SHIELDWALL      : False,
+            UpgradeId.PUNISHERGRENADES: False,
+            
         }
         self.helper_table = self.block_table.copy()
 
@@ -80,10 +88,7 @@ class TerranStrategyManager():
         ):
             self.only_allow(UnitTypeId.ORBITALCOMMAND)
 
-        if (
-            self.check_only_allow(UnitTypeId.ORBITALCOMMAND)
-            and self.bot.already_pending(UnitTypeId.ORBITALCOMMAND) >= 1
-        ):
+        if self.bot.already_pending(UnitTypeId.ORBITALCOMMAND) >= 1:
             self.allow_all_build()
 
     async def search_remain_enemies(self):

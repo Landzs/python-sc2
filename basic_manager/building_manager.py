@@ -20,10 +20,10 @@ class TerranBuildingManager():
 
         # proxy rax parameters
         self.proxy_barracks           = False
-        self.proxy_barracks_positions = (0, 0)
+        self.proxy_barracks_position = (0, 0)
         self.proxy_workers            = []
-
-        self.finding_addons_buidlings = []
+        self.proxy_barracks_back = False
+        self.landing_buidlings: Units = []
         self.landing_positions_offset = sorted(
             (
                 Point2((x, y))
@@ -39,12 +39,12 @@ class TerranBuildingManager():
             UnitTypeId.BARRACKS       : 1,
             UnitTypeId.FACTORY        : 1,
             UnitTypeId.STARPORT       : 1,
-            UnitTypeId.BARRACKSTECHLAB: 10,
-            UnitTypeId.BARRACKSREACTOR: 10,
-            UnitTypeId.FACTORYTECHLAB : 10,
-            UnitTypeId.FACTORYREACTOR : 10,
-            UnitTypeId.STARPORTTECHLAB: 10,
-            UnitTypeId.STARPORTREACTOR: 10,
+            UnitTypeId.BARRACKSTECHLAB: 1,
+            UnitTypeId.BARRACKSREACTOR: 1,
+            UnitTypeId.FACTORYTECHLAB : 1,
+            UnitTypeId.FACTORYREACTOR : 1,
+            UnitTypeId.STARPORTTECHLAB: 1,
+            UnitTypeId.STARPORTREACTOR: 1,
         }
 
     def initialize(self):
@@ -65,7 +65,14 @@ class TerranBuildingManager():
                 self.bot.main_base_ramp.depot_in_middle
             )
 
-    async def manage_building(self):
+        proxy_position = self.bot.enemy_start_locations[0].towards(
+            self.bot.game_info.map_center,
+            35
+        )
+        self.proxy_barracks_position = proxy_position
+        self.proxy_workers.append(self.bot.workers[0])
+
+    async def manage_building(self, iteration):
         """
         - Manage building, call in on_step
         - Including build Terran building
@@ -76,21 +83,33 @@ class TerranBuildingManager():
         await self.build_barrack()
         await self.build_factory()
         await self.build_starport()
+        await self.manager_building_back_to_base(iteration)
         await self.build_addons()
-        await self.manage_buildings_landing()
+        await self.manage_buildings_landing(iteration)
         await self.manage_supplydepots()
 
     def check_available(self, type_id):
+        ready_amount = self.bot.structures(type_id).ready.amount
+        pending_amount = self.bot.already_pending(type_id)
+        if type_id == UnitTypeId.BARRACKS:
+            ready_amount += self.bot.structures(
+                UnitTypeId.BARRACKSFLYING
+            ).ready.amount
+        elif type_id == UnitTypeId.FACTORY:
+            ready_amount += self.bot.structures(
+                UnitTypeId.FACTORYFLYING
+            ).ready.amount
+        elif type_id == UnitTypeId.STARPORT:
+            ready_amount += self.bot.structures(
+                UnitTypeId.STARPORTFLYING
+            ).ready.amount
+
         if(
             self.bot.townhalls.ready.exists
             and self.bot.tech_requirement_progress(type_id) == 1
             and self.bot.can_afford(type_id)
             and not self.bot.strategy_manager.check_block(type_id)
-            and (
-                self.bot.structures(type_id).ready.amount
-                + self.bot.already_pending(type_id)
-                < self.amount_limitation[type_id]
-            )
+            and ready_amount + pending_amount < self.amount_limitation[type_id]
         ):
             return True
         else:
@@ -140,12 +159,12 @@ class TerranBuildingManager():
             elif (
                 self.proxy_barracks
                 and self.proxy_workers
-                and self.proxy_barracks_positions != (0, 0)
+                and self.proxy_barracks_position != (0, 0)
                 and not self.bot.macro_control_manager.worker_rush_defense
             ):
                 barrack_position = await self.bot.find_placement(
                     UnitTypeId.BARRACKS,
-                    near=self.proxy_barracks_positions
+                    near=self.proxy_barracks_position
                 )
                 worker = next(
                     (
@@ -225,7 +244,7 @@ class TerranBuildingManager():
             building.build(addon_type)
         else:
             building(AbilityId.LIFT)
-            self.finding_addons_buidlings.append(building)
+            self.landing_buidlings.append(building)
 
     async def build_addons(self):
         for b in self.bot.structures(UnitTypeId.BARRACKS).ready.idle.filter(
@@ -252,26 +271,27 @@ class TerranBuildingManager():
             elif self.check_available(UnitTypeId.STARPORTREACTOR):
                 self.build_addon(s, UnitTypeId.STARPORTREACTOR)
 
-    async def manage_buildings_landing(self):
-        for b in self.bot.structures(UnitTypeId.BARRACKSFLYING).filter(
-            lambda b: b in self.finding_addons_buidlings
-        ):
-            self.find_place_to_land(b, near=b.position, addon=True)
+    async def manage_buildings_landing(self, iteration):
+        if iteration % 17 == 0:
+            for b in self.bot.structures(UnitTypeId.BARRACKSFLYING).filter(
+                lambda b: b in self.landing_buidlings
+            ):
+                self.find_place_to_land(b, addon=True)
 
-        for f in self.bot.structures(UnitTypeId.FACTORYFLYING).filter(
-            lambda f: f in self.finding_addons_buidlings
-        ):
-            self.find_place_to_land(f, near=f.position, addon=True)
+            for f in self.bot.structures(UnitTypeId.FACTORYFLYING).filter(
+                lambda f: f in self.landing_buidlings
+            ):
+                self.find_place_to_land(f, addon=True)
 
-        for s in self.bot.structures(UnitTypeId.STARPORTFLYING).filter(
-            lambda s: s in self.finding_addons_buidlings
-        ):
-            self.find_place_to_land(s, near=s.position, addon=True)
+            for s in self.bot.structures(UnitTypeId.STARPORTFLYING).filter(
+                lambda s: s in self.landing_buidlings
+            ):
+                self.find_place_to_land(s, addon=True)
 
-    def find_place_to_land(self, building, near: Point2, addon: bool = True):
+    def find_place_to_land(self, building, addon: bool = True):
         offset_point = Point2((-0.5, -0.5))
         possible_land_positions = (
-            near.rounded + p + offset_point
+            building.position.rounded + p + offset_point
             for p in self.landing_positions_offset
         )
         for l in possible_land_positions:
@@ -290,5 +310,27 @@ class TerranBuildingManager():
                 for p in land_points
             ):
                 building(AbilityId.LAND, l)
-                self.finding_addons_buidlings.remove(building)
+                if building in self.landing_buidlings:
+                    self.landing_buidlings.remove(building)
                 break
+
+    async def manager_building_back_to_base(self, iteration):
+        if self.proxy_barracks_back:
+            for b in self.bot.structures(UnitTypeId.BARRACKS).filter(
+                lambda b: b.distance_to(self.bot.start_location) > 70
+            ):
+                b(AbilityId.LIFT)
+
+            for b in self.bot.structures(UnitTypeId.BARRACKSFLYING).filter(
+                lambda b: b.distance_to(self.bot.start_location) > 70
+            ):
+                b.move(self.bot.start_location)
+
+            if iteration % 13 == 0:
+                for b in self.bot.structures(UnitTypeId.BARRACKSFLYING).filter(
+                    lambda b: b.distance_to(self.bot.start_location) < 20
+                ):
+                    self.landing_buidlings.append(b)
+
+    def set_limitation(self, unit, amount):
+        self.amount_limitation[unit] = amount
