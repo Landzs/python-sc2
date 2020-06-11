@@ -18,16 +18,20 @@ class TerranMacroControlManager():
         self.worker_rush_detected = False
 
         # units
-        self.SCVs   : Units       = []
-        self.marines: Units       = []
-        self.reapers: Units       = []
-        self.vikings: Units       = []
-        self.unit_attack_amount   = {
-            UnitTypeId.MARINE       : 1,
+        self.SCVs         : Units       = []
+        self.marines      : Units       = []
+        self.reapers      : Units       = []
+        self.marauders    : Units       = []
+        self.vikings      : Units       = []
+        self.combat_unit  : Units       = []
+        self.defense_units: Units       = []
+        self.unit_attack_amount         = {
+            UnitTypeId.MARINE       : 100,
             UnitTypeId.REAPER       : 1,
+            UnitTypeId.MARAUDER     : 100,
             UnitTypeId.VIKINGFIGHTER: 1
         }
-        self.worker_typeid        = [
+        self.worker_typeid              = [
             UnitTypeId.SCV,
             UnitTypeId.PROBE,
             UnitTypeId.DRONE
@@ -40,6 +44,8 @@ class TerranMacroControlManager():
 
         self.no_enemy_building_detected = False
         self.start_searching_phase      = False
+        self.supply_to_attack = 120
+        self.supply_to_make = 0
 
     async def manage_macro_control(self):
         """
@@ -48,10 +54,13 @@ class TerranMacroControlManager():
         """
 
         await self.enemies_monitor()
+        await self.combat_unit_control()
         await self.workers_control()
         await self.marines_control()
+        await self.marauders_control()
         await self.reapers_control()
         await self.vikings_control()
+        await self.kill_own_unit()
         await self.search()
 
     def initialize(self):
@@ -67,6 +76,20 @@ class TerranMacroControlManager():
         y = self.bot._game_info.playable_area.y
         y += self.bot.game_info.playable_area.height
         self.searched_area = np.full((x + 1, y + 1), False)
+
+    async def combat_unit_control(self):
+        if (
+            self.supply_to_attack <= self.bot.supply_used
+            and not self.no_enemy_building_detected
+        ):
+
+            for u in self.bot.units.idle.filter(
+                lambda u:
+                    u not in self.bot.workers
+                    and u not in self.bot.units(UnitTypeId.MULE)
+            ):
+                self.combat_unit.append(u)
+                u.attack(self.attack_target)
 
     async def enemies_monitor(self):
         """
@@ -90,6 +113,18 @@ class TerranMacroControlManager():
             and townhalls
         ):
             closest_distance = enemies_units.closest_distance_to(townhalls[0])
+
+        # defense attack
+        if closest_distance < 40:
+            for u in own_units.filter(
+                lambda u:
+                    u.distance_to(self.bot.start_location) < 60
+                    and u not in self.bot.workers
+                    and u not in self.bot.units(UnitTypeId.MULE)
+            ):
+                self.defense_units.append(u)
+        else:
+            self.defense_units = []
 
         # check if worker rush
         if (
@@ -154,6 +189,13 @@ class TerranMacroControlManager():
             if self.bot.in_pathing_grid(self.attack_target):
                 [m.attack(self.attack_target) for m in marines]
 
+    async def marauders_control(self):
+        marauders = self.bot.units(UnitTypeId.MARAUDER).idle
+        if marauders.amount >= self.unit_attack_amount[UnitTypeId.MARAUDER]:
+            self.marauders += marauders
+            if self.bot.in_pathing_grid(self.attack_target):
+                [m.attack(self.attack_target) for m in marauders]
+
     async def vikings_control(self):
         vikings = self.bot.units(UnitTypeId.VIKINGFIGHTER).idle
         if vikings.amount >= self.unit_attack_amount[UnitTypeId.VIKINGFIGHTER]:
@@ -169,6 +211,15 @@ class TerranMacroControlManager():
             self.reapers += reapers
             if self.bot.in_pathing_grid(self.attack_target):
                 [r.attack(self.attack_target) for r in reapers]
+
+    async def kill_own_unit(self):
+        if self.supply_to_make + self.bot.supply_used > 200:
+            scv_to_kill = self.bot.units(UnitTypeId.SCV).ready.random
+            for u in self.bot.units.filter(
+                lambda u: u.distance_to(scv_to_kill) < 20
+            ):
+                u.attack(scv_to_kill)
+            self.supply_to_make -= 1
 
     async def search(self):
         if self.no_enemy_building_detected:

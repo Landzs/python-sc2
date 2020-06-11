@@ -11,29 +11,37 @@ class TerranStrategyManager():
     def __init__(self, bot=None):
         self.bot         = bot
         self.block_table = {
-            UnitTypeId.SCV            : False,
-            UnitTypeId.MARINE         : False,
-            UnitTypeId.MARAUDER       : False,
-            UnitTypeId.REAPER         : False,
-            UnitTypeId.MEDIVAC        : False,
-            UnitTypeId.VIKINGFIGHTER  : False,
-            UnitTypeId.SUPPLYDEPOT    : False,
-            UnitTypeId.BARRACKS       : False,
-            UnitTypeId.FACTORY        : False,
-            UnitTypeId.STARPORT       : False,
-            UnitTypeId.COMMANDCENTER  : False,
-            UnitTypeId.REFINERY       : False,
-            UnitTypeId.ORBITALCOMMAND : False,
-            UnitTypeId.BARRACKSTECHLAB: False,
-            UnitTypeId.BARRACKSREACTOR: False,
-            UnitTypeId.FACTORYTECHLAB : False,
-            UnitTypeId.FACTORYREACTOR : False,
-            UnitTypeId.STARPORTTECHLAB: False,
-            UnitTypeId.STARPORTREACTOR: False,
-            UpgradeId.STIMPACK        : False,
-            UpgradeId.SHIELDWALL      : False,
-            UpgradeId.PUNISHERGRENADES: False,
-            
+            UnitTypeId.SCV                       : False,
+            UnitTypeId.MARINE                    : False,
+            UnitTypeId.MARAUDER                  : False,
+            UnitTypeId.REAPER                    : False,
+            UnitTypeId.MEDIVAC                   : False,
+            UnitTypeId.VIKINGFIGHTER             : False,
+            UnitTypeId.SUPPLYDEPOT               : False,
+            UnitTypeId.ENGINEERINGBAY            : False,
+            UnitTypeId.ARMORY                    : False,
+            UnitTypeId.BARRACKS                  : False,
+            UnitTypeId.FACTORY                   : False,
+            UnitTypeId.STARPORT                  : False,
+            UnitTypeId.COMMANDCENTER             : False,
+            UnitTypeId.REFINERY                  : False,
+            UnitTypeId.ORBITALCOMMAND            : False,
+            UnitTypeId.BARRACKSTECHLAB           : False,
+            UnitTypeId.BARRACKSREACTOR           : False,
+            UnitTypeId.FACTORYTECHLAB            : False,
+            UnitTypeId.FACTORYREACTOR            : False,
+            UnitTypeId.STARPORTTECHLAB           : False,
+            UnitTypeId.STARPORTREACTOR           : False,
+            UpgradeId.STIMPACK                   : False,
+            UpgradeId.SHIELDWALL                 : False,
+            UpgradeId.PUNISHERGRENADES           : False,
+            UpgradeId.TERRANINFANTRYARMORSLEVEL1 : False,
+            UpgradeId.TERRANINFANTRYARMORSLEVEL2 : False,
+            UpgradeId.TERRANINFANTRYARMORSLEVEL3 : False,
+            UpgradeId.TERRANINFANTRYWEAPONSLEVEL1: False,
+            UpgradeId.TERRANINFANTRYWEAPONSLEVEL2: False,
+            UpgradeId.TERRANINFANTRYWEAPONSLEVEL3: False,
+
         }
         self.helper_table = self.block_table.copy()
 
@@ -72,6 +80,7 @@ class TerranStrategyManager():
             self.bot.building_manager.proxy_workers = []
             self.bot.building_manager.proxy_rax          = False
             self.bot.building_manager.ramp_wall          = False
+            self.bot.macro_control_manager.supply_to_attack = 1
 
     async def prioritize_morph_orbital_command(self):
         if (
@@ -94,19 +103,29 @@ class TerranStrategyManager():
     async def search_remain_enemies(self):
         if (
             not self.check_only_allow(UnitTypeId.ORBITALCOMMAND)
-            and self.phase_number != 100
             and self.bot.macro_control_manager.start_searching_phase
         ):
-            self.phase_number = 100
-            self.allow(UnitTypeId.MARINE)
-            self.allow(UnitTypeId.FACTORY)
-            self.allow(UnitTypeId.STARPORT)
-            self.allow(UnitTypeId.VIKING)
-            self.block(UnitTypeId.REAPER)
-            self.bot.macro_control_manager.unit_attack_amount = dict.fromkeys(
-                self.bot.macro_control_manager.unit_attack_amount,
-                1
-            )
+            if self.phase_number != 100:
+                self.phase_number = 100
+                self.allow(UnitTypeId.MARINE)
+                self.allow(UnitTypeId.FACTORY)
+                self.allow(UnitTypeId.STARPORT)
+                self.allow(UnitTypeId.VIKINGFIGHTER)
+                self.block(UnitTypeId.MEDIVAC)
+                self.block(UnitTypeId.REAPER)
+                self.block(UnitTypeId.MARAUDER)
+                self.bot.macro_control_manager.supply_to_attack = 1
+
+            if (
+                self.bot.supply_used > 190
+                and (
+                    not self.bot.units(UnitTypeId.VIKINGFIGHTER).ready.amount
+                    and not self.bot.already_pending(UnitTypeId.VIKINGFIGHTER)
+                )
+            ):
+                self.bot.macro_control_manager.supply_to_make = 20
+                self.block(UnitTypeId.MARINE)
+                self.block(UnitTypeId.SCV)
 
     def initialize(self, block_list=[UnitTypeId.REFINERY]):
         [self.block(u) for u in block_list]
