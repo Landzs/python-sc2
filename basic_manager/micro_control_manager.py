@@ -2,6 +2,8 @@ from sc2.units import Units
 from sc2.position import Point2
 from sc2.ids.unit_typeid import UnitTypeId
 from sc2.ids.ability_id import AbilityId
+from sc2.ids.buff_id import BuffId
+from sc2.ids.upgrade_id import UpgradeId
 
 
 class TerranMicroControlManager():
@@ -138,13 +140,13 @@ class TerranMicroControlManager():
             close_enemies = enemies.filter(
                 lambda u:
                     u.can_attack_air
-                    and u.distance_to(u) <= enemies_distance
+                    and u.distance_to(unit) <= enemies_distance
             )
         else:
             close_enemies = enemies.filter(
                 lambda u:
                     u.can_attack_ground
-                    and u.distance_to(u) <= enemies_distance
+                    and u.distance_to(unit) <= enemies_distance
             )
         if unit.weapon_cooldown != 0 and close_enemies:
             self.retreat(unit, retreat_distance, close_enemies)
@@ -181,6 +183,20 @@ class TerranMicroControlManager():
         else:
             return False
 
+    def stimpack(self, unit):
+        enemies_in_range = self.bot.enemy_units.filter(
+            lambda u: u.distance_to(unit) < 7
+        )
+
+        # attack lowest hp enemy if any enemy is in range
+        if (
+            enemies_in_range
+            and self.bot.already_pending_upgrade(UpgradeId.STIMPACK) == 1
+            and not unit.has_buff(BuffId.STIMPACK)
+            and unit.health > 10
+        ):
+            unit(AbilityId.EFFECT_STIM)
+
     async def SCVs_micro_control(self):
         for s in self.bot.units(UnitTypeId.SCV).filter(
             lambda s: s in self.bot.macro_control_manager.SCVs
@@ -207,7 +223,11 @@ class TerranMicroControlManager():
             lambda m:
                 m in self.bot.macro_control_manager.marines
                 or m in self.bot.macro_control_manager.defense_units
+                or m in self.bot.macro_control_manager.combat_unit
         ):
+            # stimpack
+            self.stimpack(m)
+
             # marine is ready to attack, shoot nearest ground unit
             if self.attack_enemy(m, 6):
                 continue
@@ -225,6 +245,7 @@ class TerranMicroControlManager():
             lambda r:
                 r in self.bot.macro_control_manager.reapers
                 or r in self.bot.macro_control_manager.defense_units
+                or r in self.bot.macro_control_manager.combat_unit
         ):
             # reaper's health is too low, retreat
             if self.low_health_retreat(r, 4, 10, 2 / 5, 4 / 5):
@@ -285,13 +306,17 @@ class TerranMicroControlManager():
             lambda m:
                 m in self.bot.macro_control_manager.marauders
                 or m in self.bot.macro_control_manager.defense_units
+                or m in self.bot.macro_control_manager.combat_unit
         ):
+            # stimpack
+            self.stimpack(m)
+
             # marauder is ready to attack, shoot nearest ground unit
-            if self.attack_enemy(m, 6):
+            if self.attack_enemy(m, 7):
                 continue
 
             # move to max unit range if enemy is closer than 4
-            if self.keep_distance(m, 4.5, 0.5):
+            if self.keep_distance(m, 5, 0.5):
                 continue
 
             # move to nearest enemy to keep in range of weapon
@@ -316,6 +341,7 @@ class TerranMicroControlManager():
             )
             if unit_in_range:
                 m(AbilityId.MEDIVACHEAL_HEAL, unit_in_range[0])
+                continue
 
             # move to nearest unit whose health is not full
             if unhealth_unit:
@@ -327,13 +353,15 @@ class TerranMicroControlManager():
                         and u not in self.bot.units(UnitTypeId.MULE)
                         and u.is_biological
                 )
-                m.move(combat_unit.closest_to(m).position)
+                if combat_unit:
+                    m.move(combat_unit.closest_to(m).position)
 
     async def vikings_micro_control(self):
         for v in self.bot.units(UnitTypeId.VIKINGFIGHTER).filter(
             lambda v:
                 v in self.bot.macro_control_manager.vikings
                 or v in self.bot.macro_control_manager.defense_units
+                or v in self.bot.macro_control_manager.combat_unit
         ):
             # viking is ready to attack, shoot nearest ground unit
             if self.attack_enemy(v, 10):
