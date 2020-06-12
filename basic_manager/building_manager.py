@@ -20,15 +20,17 @@ class TerranBuildingManager():
 
         # proxy rax parameters
         self.proxy_barracks           = False
-        self.proxy_barracks_position = (0, 0)
+        self.proxy_barracks_position  = (0, 0)
         self.proxy_workers            = []
-        self.proxy_barracks_back = False
+        self.proxy_barracks_back      = False
+        
+        # landing parameters
         self.landing_buidlings: Units = []
         self.landing_positions_offset = sorted(
             (
                 Point2((x, y))
-                for x in range(-15, 15)
-                for y in range(-15, 15)
+                for x in range(-20, 20)
+                for y in range(-20, 20)
             ),
             key=lambda point: point.x ** 2 + point.y ** 2,
         )
@@ -39,6 +41,8 @@ class TerranBuildingManager():
             UnitTypeId.BARRACKS       : 1,
             UnitTypeId.FACTORY        : 1,
             UnitTypeId.STARPORT       : 1,
+            UnitTypeId.ENGINEERINGBAY : 2,
+            UnitTypeId.ARMORY         : 1,
             UnitTypeId.BARRACKSTECHLAB: 1,
             UnitTypeId.BARRACKSREACTOR: 1,
             UnitTypeId.FACTORYTECHLAB : 1,
@@ -53,9 +57,7 @@ class TerranBuildingManager():
         - Need map info so should be called in on_start
         """
 
-        self.depot_ramp_positions.extend(
-            self.bot.main_base_ramp.corner_depots
-        )
+        # ramp wall parameters
         if self.ramp_middle_barrack:
             self.barrack_ramp_position.append(
                 self.bot.main_base_ramp.barracks_correct_placement
@@ -64,7 +66,11 @@ class TerranBuildingManager():
             self.depot_ramp_positions.append(
                 self.bot.main_base_ramp.depot_in_middle
             )
+        self.depot_ramp_positions.extend(
+            self.bot.main_base_ramp.corner_depots
+        )
 
+        # proxy rax parameters
         proxy_position = self.bot.enemy_start_locations[0].towards(
             self.bot.game_info.map_center,
             35
@@ -74,21 +80,63 @@ class TerranBuildingManager():
 
     async def manage_building(self, iteration):
         """
-        - Manage building, call in on_step
+        - Manage building, called in on_step
         - Including build Terran building
         - Some buildings can be proxy rax
         """
 
-        await self.build_depot()
-        await self.build_barrack()
-        await self.build_factory()
-        await self.build_starport()
-        await self.manager_building_back_to_base(iteration)
+        # supplydepot and barrack need check ramp_wall and proxy
+        if (
+            self.ramp_wall
+            and self.depot_ramp_positions
+        ):
+            await self.build(UnitTypeId.SUPPLYDEPOT, ramp_wall=True)
+        else:
+            await self.build(UnitTypeId.SUPPLYDEPOT)
+
+        if (
+            self.ramp_wall
+            and self.barrack_ramp_position
+            and self.ramp_middle_barrack
+            and (
+                not self.proxy_barracks
+                or self.bot.macro_control_manager.worker_rush_defense
+            )
+        ):
+            await self.build(UnitTypeId.BARRACKS, ramp_wall=True)
+        elif(
+            self.proxy_workers
+            and self.proxy_barracks_position != (0, 0)
+            and not self.bot.macro_control_manager.worker_rush_defense
+        ):
+            await self.build(UnitTypeId.BARRACKS, proxy=True)
+        else:
+            await self.build(UnitTypeId.BARRACKS)
+
+        await self.build(UnitTypeId.FACTORY)
+        await self.build(UnitTypeId.STARPORT)
+        await self.build(UnitTypeId.ENGINEERINGBAY)
+        await self.build(UnitTypeId.ARMORY)
         await self.build_addons()
-        await self.manage_buildings_landing(iteration)
+
         await self.manage_supplydepots()
+        await self.manager_building_back_to_base(iteration)
+        await self.manage_buildings_landing(iteration)
 
     def check_available(self, type_id):
+        # supplydepot need special conditions
+        if type_id == UnitTypeId.SUPPLYDEPOT:
+            pending_limitation = 1 if self.bot.supply_used < 70 else 2
+            supply_left_threshold = 4 if self.bot.supply_used < 70 else 7
+            if(
+                not self.bot.supply_left < supply_left_threshold
+                or self.bot.supply_used >= 200
+                or self.bot.already_pending(UnitTypeId.SUPPLYDEPOT)
+                    >= pending_limitation
+            ):
+                return False
+
+        # add flying buildings amount
         ready_amount = self.bot.structures(type_id).ready.amount
         pending_amount = self.bot.already_pending(type_id)
         if type_id == UnitTypeId.BARRACKS:
@@ -124,86 +172,43 @@ class TerranBuildingManager():
         )
         return position
 
-    async def build_depot(self):
-        if(
-            self.bot.supply_left < 4
-            and not self.bot.already_pending(UnitTypeId.SUPPLYDEPOT)
-            and self.check_available(UnitTypeId.SUPPLYDEPOT)
-        ):
-            if (
-                self.ramp_wall
-                and self.depot_ramp_positions
-            ):
-                depot_position = self.depot_ramp_positions.pop()
+    async def build(self, type_id, ramp_wall=False, proxy=False):
+        if self.check_available(type_id):
+            if ramp_wall:
+                if type_id == UnitTypeId.BARRACKS:
+                    position = self.barrack_ramp_position.pop()
+                    worker = self.bot.select_build_worker(position)
+                    if not worker:
+                        self.barrack_ramp_position.append(position)
+                elif type_id == UnitTypeId.SUPPLYDEPOT:
+                    position = self.depot_ramp_positions.pop()
+                    worker = self.bot.select_build_worker(position)
+                    if not worker:
+                        self.depot_ramp_positions.append(position)
+            elif proxy:
+                if type_id == UnitTypeId.BARRACKS:
+                    position = await self.bot.find_placement(
+                        type_id,
+                        near=self.proxy_barracks_position
+                    )
+                    worker = next(
+                        (
+                            w
+                            for w in self.bot.units(UnitTypeId.SCV).filter(
+                                lambda w: w in self.proxy_workers
+                            )
+                            if (
+                                not w.is_constructing_scv
+                                and w.distance_to(position) < 75
+                            )
+                        ),
+                        None
+                    )
             else:
-                depot_position = await self.get_position_near_townhall(
-                    UnitTypeId.SUPPLYDEPOT
-                )
-            worker = self.bot.select_build_worker(depot_position)
+                position = await self.get_position_near_townhall(type_id)
+                worker = self.bot.select_build_worker(position)
             if worker:
-                worker.build(UnitTypeId.SUPPLYDEPOT, depot_position)
-
-    async def build_barrack(self):
-        if self.check_available(UnitTypeId.BARRACKS):
-            if (
-                self.ramp_middle_barrack
-                and self.barrack_ramp_position
-                and self.ramp_wall
-                and (
-                    not self.proxy_barracks
-                    or self.bot.macro_control_manager.worker_rush_defense
-                )
-            ):
-                barrack_position = self.barrack_ramp_position.pop()
-                worker = self.bot.select_build_worker(barrack_position)
-            elif (
-                self.proxy_barracks
-                and self.proxy_workers
-                and self.proxy_barracks_position != (0, 0)
-                and not self.bot.macro_control_manager.worker_rush_defense
-            ):
-                barrack_position = await self.bot.find_placement(
-                    UnitTypeId.BARRACKS,
-                    near=self.proxy_barracks_position
-                )
-                worker = next(
-                    (
-                        w
-                        for w in self.bot.units(UnitTypeId.SCV).filter(
-                            lambda w: w in self.proxy_workers
-                        )
-                        if (
-                            not w.is_constructing_scv
-                            and w.distance_to(barrack_position) < 75
-                        )
-                    ),
-                    None
-                )
-            else:
-                barrack_position = await self.get_position_near_townhall(
-                    UnitTypeId.BARRACKS
-                )
-                worker = self.bot.select_build_worker(barrack_position)
-            if worker:
-                worker.build(UnitTypeId.BARRACKS, barrack_position)
-
-    async def build_factory(self):
-        if self.check_available(UnitTypeId.FACTORY):
-            factory_position = await self.get_position_near_townhall(
-                UnitTypeId.FACTORY
-            )
-            worker = self.bot.select_build_worker(factory_position)
-            if worker:
-                worker.build(UnitTypeId.FACTORY, factory_position)
-
-    async def build_starport(self):
-        if self.check_available(UnitTypeId.STARPORT):
-            starport_position = await self.get_position_near_townhall(
-                UnitTypeId.STARPORT
-            )
-            worker = self.bot.select_build_worker(starport_position)
-            if worker:
-                worker.build(UnitTypeId.STARPORT, starport_position)
+                worker.build(type_id, position)
 
     async def manage_supplydepots(self):
         for d in self.bot.structures(UnitTypeId.SUPPLYDEPOT).ready:
@@ -274,17 +279,17 @@ class TerranBuildingManager():
     async def manage_buildings_landing(self, iteration):
         if iteration % 17 == 0:
             for b in self.bot.structures(UnitTypeId.BARRACKSFLYING).filter(
-                lambda b: b in self.landing_buidlings
+                lambda b: b in self.landing_buidlings or b.is_idle
             ):
                 self.find_place_to_land(b, addon=True)
 
             for f in self.bot.structures(UnitTypeId.FACTORYFLYING).filter(
-                lambda f: f in self.landing_buidlings
+                lambda f: f in self.landing_buidlings or f.is_idle
             ):
                 self.find_place_to_land(f, addon=True)
 
             for s in self.bot.structures(UnitTypeId.STARPORTFLYING).filter(
-                lambda s: s in self.landing_buidlings
+                lambda s: s in self.landing_buidlings or s.is_idle
             ):
                 self.find_place_to_land(s, addon=True)
 
@@ -322,7 +327,7 @@ class TerranBuildingManager():
                 b(AbilityId.LIFT)
 
             for b in self.bot.structures(UnitTypeId.BARRACKSFLYING).filter(
-                lambda b: b.distance_to(self.bot.start_location) > 70
+                lambda b: b.distance_to(self.bot.start_location) > 60
             ):
                 b.move(self.bot.start_location)
 
