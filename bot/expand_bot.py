@@ -23,7 +23,10 @@ class ExpandBot(sc2.BotAI):
         )
 
     async def on_step(self, iteration):
-        if self.can_afford(UnitTypeId.COMMANDCENTER):
+        if (
+            self.can_afford(UnitTypeId.COMMANDCENTER)
+            and self.locations
+        ):
             position = self.locations.pop()
             while(
                 position.distance_to(self.enemy_start_locations[0]) < 40
