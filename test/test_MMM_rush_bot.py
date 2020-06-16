@@ -1,18 +1,17 @@
+from subprocess import check_output
+import random
+from os.path import isfile, join
+from bot.worker_rush import WorkerRushBot
+from bot.MMM import MMMBot
 import sc2
 import os
 import pytest
-import sys
+import logging
 from os import listdir
 from sc2 import Race, Difficulty
 from sc2.player import Bot, Computer
 
-# Load bot
-from bot.reaper_rush import ReaperRushBot
-from bot.worker_rush import WorkerRushBot
-from os.path import isfile, join
-import random
-from subprocess import check_output
-
+logger = logging.getLogger(__name__)
 
 
 def get_maps():
@@ -22,18 +21,20 @@ def get_maps():
     return maps
 
 
-def vs_computer(caplog, race, bot):
+def vs_computer(caplog, race, bot, computer_race):
     maps = get_maps()
+    win = 0
+    game = 0
     for m in maps:
         result = sc2.run_game(
             sc2.maps.get(m),
             [
                 Bot(Race.Terran, bot()),
-                Computer(Race.Terran, Difficulty.VeryHard)
+                Computer(computer_race, Difficulty.VeryHard)
             ],
             realtime=False
         )
-
+        game += 1
         for rec in caplog.records:
             if "AI step threw an error" in rec.msg:
                 raise RuntimeError("Erroneous behavior logged in a")
@@ -44,6 +45,11 @@ def vs_computer(caplog, race, bot):
             sc2.Result.Defeat,
             sc2.Result.Tie
         ]
+        if result == sc2.Result.Victory:
+            win += 1
+    win_rate = win / game
+    assert win_rate > 0.9, "Win rate againts computer: {}".format(win_rate)
+    print("Win rate againts computer: {}".format(win_rate))
 
 
 def vs_bot(caplog, bot, opponent):
@@ -53,7 +59,7 @@ def vs_bot(caplog, bot, opponent):
         command += " -m " + m
         command += " -b " + bot
         command += " -o " + opponent
-        output = str(check_output(command.split(" "), timeout = 600))
+        output = str(check_output(command.split(" "), timeout=1200))
         start = r"Result for player 1 - Bot "
         start += bot + "(Terran): "
         end = r"\r"
@@ -61,13 +67,21 @@ def vs_bot(caplog, bot, opponent):
         assert result == "Victory" , "Output is {}".format(output)
 
 
-def test_vs_computer(caplog):
-    vs_computer(caplog, Race.Terran, ReaperRushBot)
-
-
 def test_vs_worker_rush_bot(caplog):
-    vs_bot(caplog, "ReaperRushBot", "WorkerRushBot")
+    vs_bot(caplog, "MMMBot", "WorkerRushBot")
 
 
 def test_vs_expand_bot(caplog):
-    vs_bot(caplog, "ReaperRushBot", "ExpandBot")
+    vs_bot(caplog, "MMMBot", "ExpandBot")
+
+
+def test_vs_protoss_computer(caplog):
+    vs_computer(caplog, Race.Terran, MMMBot, Race.Protoss)
+
+
+def test_vs_terran_computer(caplog):
+    vs_computer(caplog, Race.Terran, MMMBot, Race.Terran)
+
+
+def test_vs_zerg_computer(caplog):
+    vs_computer(caplog, Race.Terran, MMMBot, Race.Zerg)
