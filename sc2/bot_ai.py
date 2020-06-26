@@ -1234,7 +1234,11 @@ class BotAI(DistanceCalculation):
         # Not affordable
         if not self.can_afford(unit_type):
             return 0
-
+        
+        amount -= self.already_pending(unit_type)
+        if amount <= 0:
+            return 0
+        
         trained_amount = 0
         # All train structure types: queen can made from hatchery, lair, hive
         train_structure_type: Set[UnitTypeId] = UNIT_TRAINED_FROM[unit_type]
