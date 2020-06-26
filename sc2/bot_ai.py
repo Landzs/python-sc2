@@ -43,6 +43,7 @@ from .unit import Unit
 from .units import Units
 from .game_data import Cost
 from .unit_command import UnitCommand
+from s2clientprotocol.common_pb2 import Point
 
 logger = logging.getLogger(__name__)
 
@@ -67,7 +68,7 @@ class BotAI(DistanceCalculation):
             self.opponent_id: str = None
         # Select distance calculation method, see distances.py: _distances_override_functions function
         if not hasattr(self, "distance_calculation_method"):
-            self.distance_calculation_method: int = 2
+            self.distance_calculation_method: int = 0
         # Select if the Unit.command should return UnitCommand objects. Set this to True if your bot uses 'self.do(unit(ability, target))'
         if not hasattr(self, "unit_command_uses_self_do"):
             self.unit_command_uses_self_do: bool = False
@@ -1133,6 +1134,16 @@ class BotAI(DistanceCalculation):
             and structure.tag in self._structures_previous_map
             and self._structures_previous_map[structure.tag].build_progress == structure.build_progress
         )
+
+    def get_construction_SCV(self, structure:Unit) -> Unit:
+        for worker in self.workers:
+            if worker.is_constructing_scv:
+                for order in worker.orders:
+                    target = order.target
+                    if isinstance(target, Point):
+                        target = Point2.from_proto(target)
+                    if target == structure.position:
+                        return worker
 
     async def build(
         self,
