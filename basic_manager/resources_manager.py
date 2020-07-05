@@ -1,8 +1,8 @@
+from typing import Union
 from sc2.unit import Unit
 from sc2.position import Point2
 from sc2.ids.ability_id import AbilityId
 from sc2.ids.unit_typeid import UnitTypeId
-from typing import Union
 
 
 class TerranResourcesManager:
@@ -127,10 +127,10 @@ class TerranResourcesManager:
     def harvesting_efficiency(self):
         """
         - Return mineral efficiency,gas efficiency and number of workers needed to be adjusted
-        - Number of workers needed to be adjusted is the worker's numberneeded to be switch to gas or mineral to reach
-        the resource_ratio
-        - When workers_to_transfer is positive, it means we need send workers to gas. When negative, send workers to
-        mineral
+        - Number of workers needed to be adjusted is the worker's numberneeded to be switch to gas or mineral
+        to reach the resource_ratio
+        - When workers_to_transfer is positive, it means we need send workers to gas. When negative, send workers
+        to mineral
 
         param: resource_ratio
         """
@@ -171,8 +171,8 @@ class TerranResourcesManager:
         """
         - Distributes workers across all the bases taken.
         - Keyword `resource_ratio` takes a float. If the current harvesting efficiency of minerals to gas ratio is
-        bigger than `resource_ratio`, this function prefer filling gas_buildings first, if it is lower, it will prefer
-        sending workers to minerals first.
+        bigger than `resource_ratio`, this function prefer filling gas_buildings first, if it is lower, it will
+        prefer sending workers to minerals first.
 
         param: resource_ratio
         """
