@@ -63,5 +63,5 @@ class TerranPhaseManager():
         await self.__run_current_phase()
 
     @property
-    async def current_phase(self):
+    def current_phase(self):
         return self.__current_phase

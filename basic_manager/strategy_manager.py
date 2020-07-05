@@ -1,16 +1,16 @@
-from sc2.ids.unit_typeid import UnitTypeId
 from sc2.ids.upgrade_id import UpgradeId
-from sc2.ids.ability_id import AbilityId
+from sc2.ids.unit_typeid import UnitTypeId
 
 
 class TerranStrategyManager():
     """
     - Basic strategy management for Terran
+    - Including defense rush, prioritize morph orbital command and search remain enemies strategy
     """
 
     def __init__(self, bot=None):
-        self.bot         = bot
-        self.block_table = {
+        self.__bot         = bot
+        self.__block_table = {
             UnitTypeId.SCV                       : False,
             UnitTypeId.MARINE                    : False,
             UnitTypeId.MARAUDER                  : False,
@@ -25,6 +25,7 @@ class TerranStrategyManager():
             UnitTypeId.STARPORT                  : False,
             UnitTypeId.COMMANDCENTER             : False,
             UnitTypeId.REFINERY                  : False,
+            UnitTypeId.BUNKER                    : False,
             UnitTypeId.ORBITALCOMMAND            : False,
             UnitTypeId.BARRACKSTECHLAB           : False,
             UnitTypeId.BARRACKSREACTOR           : False,
@@ -41,16 +42,8 @@ class TerranStrategyManager():
             UpgradeId.TERRANINFANTRYWEAPONSLEVEL1: False,
             UpgradeId.TERRANINFANTRYWEAPONSLEVEL2: False,
             UpgradeId.TERRANINFANTRYWEAPONSLEVEL3: False,
-
         }
-        self.helper_table = self.block_table.copy()
-
-        # phase control initializations
-        self.phase = {
-            0: 'Defense Worker Rush',
-            100: 'Searching Remain Enemies'
-        }
-        self.phase_number = 1
+        self.__helper_table = self.__block_table.copy()
 
     async def manage_baisc_strategy(self):
         """
@@ -58,120 +51,89 @@ class TerranStrategyManager():
         - Including prioritize morphing orbital command
         """
 
-        await self.counter_workers_rush()
-        await self.prioritize_morph_orbital_command()
-        await self.search_remain_enemies()
+        await self.__defense_rush()
+        await self.__prioritize_morph_orbital_command()
+        await self.__search_remain_enemies()
 
-    async def counter_workers_rush(self):
+    async def __defense_rush(self):
         if (
-            self.bot.macro_control_manager.worker_rush_detected
-            and self.phase_number != 0
+            self.__bot.macro_control_manager.close_enemy_units
+            and self.__bot.macro_control_manager.closest_distance < 90
+            and all(e.type_id in self.__bot.worker_typeid for e in self.__bot.enemy_units)
+            and all(o.type_id in self.__bot.worker_typeid for o in self.__bot.units)
+            and len(self.__bot.macro_control_manager.close_enemy_units) >= 3
         ):
-            self.phase_number = 0
-            self.bot.resources_manager.resource_ratio    = 100
-            self.block_all_build_hard()
-            self.allow(UnitTypeId.SCV)
-            self.allow(UnitTypeId.SUPPLYDEPOT)
-            self.allow(UnitTypeId.MARINE)
-            self.allow(UnitTypeId.BARRACKS)
-            self.bot.building_manager.amount_limitation[
-                UnitTypeId.BARRACKS
-            ] = 1
-            self.bot.building_manager.proxy_workers = []
-            self.bot.building_manager.proxy_rax          = False
-            self.bot.building_manager.ramp_wall          = False
-            self.bot.macro_control_manager.supply_to_attack = 1
+            self.__bot.phase_manager.switch_to_phase("Defense Worker Rush")
 
-    async def prioritize_morph_orbital_command(self):
         if (
-            self.bot.townhalls(UnitTypeId.COMMANDCENTER).ready.amount >= 1
-            and self.bot.already_pending(UnitTypeId.ORBITALCOMMAND)
-                < self.bot.townhalls(UnitTypeId.COMMANDCENTER).ready.amount
+            self.__bot.supply_used <= 23
+            and len(self.__bot.enemy_townhalls) < 2
+            and len(self.__bot.enemy_combat_units[UnitTypeId.ZERGLING])
+            and not self.__bot.enemy_tech_structure[UnitTypeId.ROACHWARREN]
+        ):
+            self.__bot.phase_manager.switch_to_phase("Defense Zergling Rush")
+
+        if (
+            self.__bot.supply_used <= 29
+            and self.__bot.enemy_tech_structure[UnitTypeId.ROACHWARREN]
+        ):
+            self.__bot.phase_manager.switch_to_phase("Defense Roach Rush")
+
+    async def __prioritize_morph_orbital_command(self):
+        if (
+            self.__bot.townhalls(UnitTypeId.COMMANDCENTER).ready.amount >= 1
+            and self.__bot.already_pending(UnitTypeId.ORBITALCOMMAND)
+                < self.__bot.townhalls(UnitTypeId.COMMANDCENTER).ready.amount
             and (
-                self.bot.structure_type_build_progress(
-                    UnitTypeId.BARRACKS
-                ) > 0.75
-                or self.bot.structures(UnitTypeId.BARRACKS).ready.amount >= 1
+                self.__bot.structure_type_build_progress(UnitTypeId.BARRACKS) > 0.75
+                or self.__bot.structures(UnitTypeId.BARRACKS).ready.amount >= 1
             )
-            and self.phase_number != 0
+            and self.__bot.current_phase != "Defense Worker Rush"
         ):
             self.only_allow(UnitTypeId.ORBITALCOMMAND)
 
-        if self.bot.already_pending(UnitTypeId.ORBITALCOMMAND) >= 1:
+        if self.__bot.already_pending(UnitTypeId.ORBITALCOMMAND) >= 1:
             self.allow_all_build()
 
-    async def search_remain_enemies(self):
+    async def __search_remain_enemies(self):
         if (
-            not self.check_only_allow(UnitTypeId.ORBITALCOMMAND)
-            and self.bot.macro_control_manager.start_searching_phase
+            self.__bot.units.closest_distance_to(self.__bot.macro_control_manager.attack_target) < 5
+            and not self.__bot.enemy_units_ground
         ):
-            if self.phase_number != 100:
-                self.phase_number = 100
-                self.allow(UnitTypeId.MARINE)
-                self.allow(UnitTypeId.FACTORY)
-                self.allow(UnitTypeId.STARPORT)
-                self.allow(UnitTypeId.VIKINGFIGHTER)
-                self.block(UnitTypeId.MEDIVAC)
-                self.block(UnitTypeId.REAPER)
-                self.block(UnitTypeId.MARAUDER)
-                self.bot.macro_control_manager.supply_to_attack = 1
+            self.__bot.phase_manager.switch_to_phase("Search Enemies")
 
-            if (
-                self.bot.supply_used > 190
-                and (
-                    not self.bot.units(UnitTypeId.VIKINGFIGHTER).ready.amount
-                    and not self.bot.already_pending(UnitTypeId.VIKINGFIGHTER)
-                )
-            ):
-                self.bot.macro_control_manager.supply_to_make = 20
-                self.block(UnitTypeId.MARINE)
-                self.block(UnitTypeId.SCV)
-
-    def initialize(self, block_list=[UnitTypeId.REFINERY]):
+    def initialize_block_list(self, block_list=[UnitTypeId.REFINERY]):
         [self.block(u) for u in block_list]
 
     def block_all_build(self):
-        self.block_table = self.block_table.fromkeys(self.block_table, True)
+        self.__block_table = self.__block_table.fromkeys(self.__block_table, True)
 
     def allow_all_build(self):
-        self.block_table = {
-            k: (True if self.helper_table[k] == True else False)
-            for (k, v) in self.block_table.items()
-        }
+        self.__block_table = {k: (True if self.__helper_table[k] == True else False) for k in self.__block_table}
 
     def block_all_build_hard(self):
-        self.block_table = self.block_table.fromkeys(self.block_table, True)
+        self.__block_table = self.__block_table.fromkeys(self.__block_table, True)
 
     def allow_all_build_hard(self):
-        self.block_table = self.block_table.fromkeys(self.block_table, False)
+        self.__block_table = self.__block_table.fromkeys(self.__block_table, False)
 
     def only_allow(self, id):
-        self.block_table = {
-            k: (True if k != id else False)
-            for (k, v) in self.block_table.items()
-        }
+        self.__block_table = {k: (True if k != id else False) for k in self.__block_table}
 
     def only_block(self, id):
-        self.block_table = {
-            k: (False if k != id else True)
-            for (k, v) in self.block_table.items()
-        }
+        self.__block_table = {k: (False if k != id else True) for k in self.__block_table}
 
-    def allow(self, id):
-        self.block_table[id]  = False
-        self.helper_table[id] = False
+    def allow(self, id: UnitTypeId):
+        if not self.check_only_allow(UnitTypeId.ORBITALCOMMAND):
+            self.__block_table[id] = self.__helper_table[id] = False
 
     def block(self, id):
-        self.block_table[id]  = True
-        self.helper_table[id] = True
+        if not self.check_only_allow(UnitTypeId.ORBITALCOMMAND):
+            self.__block_table[id]  = self.__helper_table[id] = True
 
     def check_block(self, id):
-        return self.block_table[id]
+        return self.__block_table[id]
 
     def check_only_allow(self, id):
-        others = all(
-            self.block_table[i]
-            for i in self.block_table
-            if i != id
-        )
-        return not self.block_table[id] and others
+        others_status = all(self.__block_table[i] for i in self.__block_table if i != id)
+        return not self.__block_table[id] and others_status
