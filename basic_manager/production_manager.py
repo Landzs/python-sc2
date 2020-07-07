@@ -1,5 +1,6 @@
-from sc2.ids.unit_typeid import UnitTypeId
 from sc2.ids.upgrade_id import UpgradeId
+from sc2.ids.unit_typeid import UnitTypeId
+from sc2.dicts.unit_trained_from import UNIT_TRAINED_FROM
 
 
 class TerranProductionManager():
@@ -8,122 +9,74 @@ class TerranProductionManager():
     """
 
     def __init__(self, bot=None):
-        self.bot = bot
+        self.__bot             = bot
+        self.__training_amount = {
+            "Base Structures": {
+                UnitTypeId.MARINE       : 0,
+                UnitTypeId.MARAUDER     : 0,
+                UnitTypeId.REAPER       : 0,
+                UnitTypeId.MEDIVAC      : 0,
+                UnitTypeId.VIKINGFIGHTER: 0,
+            },
+            "Proxy Structures": {
+                UnitTypeId.MARINE       : 0,
+                UnitTypeId.MARAUDER     : 0,
+                UnitTypeId.REAPER       : 0,
+                UnitTypeId.MEDIVAC      : 0,
+                UnitTypeId.VIKINGFIGHTER: 0,
+            }
+        }
+        self.__research_type_id = [
+            UpgradeId.STIMPACK,
+            UpgradeId.SHIELDWALL,
+            UpgradeId.PUNISHERGRENADES,
+            UpgradeId.TERRANINFANTRYWEAPONSLEVEL1,
+            UpgradeId.TERRANINFANTRYWEAPONSLEVEL2,
+            UpgradeId.TERRANINFANTRYWEAPONSLEVEL3,
+            UpgradeId.TERRANINFANTRYARMORSLEVEL1,
+            UpgradeId.TERRANINFANTRYARMORSLEVEL2,
+            UpgradeId.TERRANINFANTRYARMORSLEVEL3,
+        ]
 
-    async def manage_production(self):
+    async def manage_production(self, iteration):
         """
         - Manage basic production
         - Including training units and upgrade tech
         """
 
-        await self.manage_barracks_training()
-        await self.manage_techlab_research()
-        await self.manage_starpots_training()
+        await self.manage_structures_training("Base Structures")
+        await self.manage_structures_training("Proxy Structures")
+        await self.manage_research()
 
-    def check_available(self, type_id):
-        if(
-            self.bot.can_afford(type_id)
-            and not self.bot.strategy_manager.check_block(type_id)
-        ):
-            return True
-        else:
-            return False
+    async def manage_structures_training(self, structures_group):
+        assert structures_group == "Base Structures" or "Proxy Structures"
 
-    async def manage_barracks_training(self):
-        for b in self.bot.structures(UnitTypeId.BARRACKS).ready.idle:
-            if b.has_techlab:
-                if self.check_available(UnitTypeId.REAPER):
-                    b.build(UnitTypeId.REAPER)
-                elif self.check_available(UnitTypeId.MARAUDER):
-                    b.build(UnitTypeId.MARAUDER)
-                elif self.check_available(UnitTypeId.MARINE):
-                    b.build(UnitTypeId.MARINE)
-            else:
-                if self.check_available(UnitTypeId.REAPER):
-                    b.build(UnitTypeId.REAPER)
-                    b.build(UnitTypeId.REAPER)
-                elif self.check_available(UnitTypeId.MARINE):
-                    b.build(UnitTypeId.MARINE)
-                    b.build(UnitTypeId.MARINE)
+        structures = self.__bot.building_manager.structures[structures_group]
+        for type_id , amount in self.__training_amount[structures_group].items():
+            traning_structure = structures[next(iter(UNIT_TRAINED_FROM[type_id]))]
+            if (
+                amount > 0
+                and traning_structure
+                and not self.__bot.strategy_manager.check_block(type_id)
+            ):
+                self.__bot.train(type_id, amount, assigned_training_structures=traning_structure)
 
-    async def manage_starpots_training(self):
-        for s in self.bot.structures(UnitTypeId.STARPORT).ready.idle:
-            if self.check_available(UnitTypeId.VIKINGFIGHTER):
-                s.build(UnitTypeId.VIKINGFIGHTER)
-            elif self.check_available(UnitTypeId.MEDIVAC):
-                s.build(UnitTypeId.MEDIVAC)
+    async def manage_research(self):
+        for type_id in self.__research_type_id:
+            if (
+                not self.__bot.strategy_manager.check_block(type_id)
+                and self.__bot.already_pending_upgrade(type_id) == 0
+            ):
+                self.__bot.research(type_id)
 
-    async def manage_techlab_research(self):
-        if (
-            self.bot.already_pending_upgrade(UpgradeId.STIMPACK) == 0
-            and self.check_available(UpgradeId.STIMPACK)
-        ):
-            self.bot.research(UpgradeId.STIMPACK)
-        if (
-            self.bot.already_pending_upgrade(UpgradeId.SHIELDWALL) == 0
-            and self.check_available(UpgradeId.SHIELDWALL)
-        ):
-            self.bot.research(UpgradeId.SHIELDWALL)
-        if (
-            self.bot.already_pending_upgrade(UpgradeId.PUNISHERGRENADES) == 0
-            and self.check_available(UpgradeId.PUNISHERGRENADES)
-        ):
-            self.bot.research(UpgradeId.PUNISHERGRENADES)
+    def set_base_training_amount(self, type_id, amount):
+        self.__training_amount["Base Structures"][type_id] = amount
 
-        infantry_weapon1_progress = self.bot.already_pending_upgrade(
-                UpgradeId.TERRANINFANTRYWEAPONSLEVEL1
-        )
-        infantry_weapon2_progress = self.bot.already_pending_upgrade(
-                UpgradeId.TERRANINFANTRYWEAPONSLEVEL2
-        )
-        infantry_weapon3_progress = self.bot.already_pending_upgrade(
-                UpgradeId.TERRANINFANTRYWEAPONSLEVEL3
-        )
-        infantry_armor1_progress = self.bot.already_pending_upgrade(
-                UpgradeId.TERRANINFANTRYARMORSLEVEL1
-        )
-        infantry_armor2_progress = self.bot.already_pending_upgrade(
-                UpgradeId.TERRANINFANTRYARMORSLEVEL2
-        )
-        infantry_armor3_progress = self.bot.already_pending_upgrade(
-                UpgradeId.TERRANINFANTRYARMORSLEVEL3
-        )
-        if (
-            infantry_weapon1_progress == 0
-            and self.check_available(UpgradeId.TERRANINFANTRYWEAPONSLEVEL1)
-        ):
-            self.bot.research(UpgradeId.TERRANINFANTRYWEAPONSLEVEL1)
+    def set_proxy_training_amount(self, type_id, amount):
+        self.__training_amount["Proxy Structures"][type_id] = amount
 
-        if (
-            infantry_weapon2_progress == 0
-            and infantry_weapon1_progress == 1
-            and self.check_available(UpgradeId.TERRANINFANTRYWEAPONSLEVEL2)
-        ):
-            self.bot.research(UpgradeId.TERRANINFANTRYWEAPONSLEVEL2)
+    def get_base_training_amount(self, type_id):
+        return self.__training_amount["Base Structures"][type_id]
 
-        if (
-            infantry_weapon3_progress == 0
-            and infantry_weapon2_progress == 1
-            and self.check_available(UpgradeId.TERRANINFANTRYWEAPONSLEVEL3)
-        ):
-            self.bot.research(UpgradeId.TERRANINFANTRYWEAPONSLEVEL3)
-
-        if (
-            infantry_armor1_progress == 0
-            and self.check_available(UpgradeId.TERRANINFANTRYARMORSLEVEL1)
-        ):
-            self.bot.research(UpgradeId.TERRANINFANTRYARMORSLEVEL1)
-
-        if (
-            infantry_armor2_progress == 0
-            and infantry_armor1_progress == 1
-            and self.check_available(UpgradeId.TERRANINFANTRYARMORSLEVEL2)
-        ):
-            self.bot.research(UpgradeId.TERRANINFANTRYARMORSLEVEL2)
-
-        if (
-            infantry_armor3_progress == 0
-            and infantry_armor2_progress == 1
-            and self.check_available(UpgradeId.TERRANINFANTRYARMORSLEVEL3)
-        ):
-            self.bot.research(UpgradeId.TERRANINFANTRYARMORSLEVEL3)
+    def get_proxy_training_amount(self, type_id):
+        return self.__training_amount["Proxy Structures"][type_id]
