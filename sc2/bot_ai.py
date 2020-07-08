@@ -154,6 +154,10 @@ class BotAI(DistanceCalculation):
         )
 
     @property
+    def iteration(self):
+        return self._total_steps_iterations
+    
+    @property
     def game_info(self) -> GameInfo:
         """ See game_info.py """
         return self._game_info
@@ -457,12 +461,17 @@ class BotAI(DistanceCalculation):
         closest = None
         distance = math.inf
         for el in self.expansion_locations_list:
-
             def is_near_to_expansion(t):
                 return t.distance_to(el) < self.EXPANSION_GAP_THRESHOLD
 
             if any(map(is_near_to_expansion, self.townhalls)):
                 # already taken
+                continue
+
+            minerals_near = {m for m in self.mineral_field if m.distance_to(el) <= 12}
+            gas_near = {v for v in self.vespene_geyser if v.distance_to(el) <= 12 and v.has_vespene}
+
+            if not minerals_near and not gas_near:
                 continue
 
             startp = self._game_info.player_start_location
@@ -1188,7 +1197,7 @@ class BotAI(DistanceCalculation):
         return True
 
     def train(
-        self, unit_type: UnitTypeId, amount: int = 1, closest_to: Point2 = None, train_only_idle_buildings: bool = True
+        self, unit_type: UnitTypeId, amount: int = 1, assigned_training_structures: Units = None, closest_to: Point2 = None, train_only_idle_buildings: bool = True
     ) -> int:
         """ Trains a specified number of units. Trains only one if amount is not specified.
         Warning: currently has issues with warp gate warp ins
@@ -1242,7 +1251,10 @@ class BotAI(DistanceCalculation):
         trained_amount = 0
         # All train structure types: queen can made from hatchery, lair, hive
         train_structure_type: Set[UnitTypeId] = UNIT_TRAINED_FROM[unit_type]
-        train_structures = self.structures if self.race != Race.Zerg else self.structures | self.larva
+        if assigned_training_structures:
+            train_structures = self.structures.filter(lambda s : s in assigned_training_structures)
+        else:
+            train_structures = self.structures if self.race != Race.Zerg else self.structures | self.larva
         requires_techlab = any(
             TRAIN_INFO[structure_type][unit_type].get("requires_techlab", False)
             for structure_type in train_structure_type
@@ -1297,6 +1309,7 @@ class BotAI(DistanceCalculation):
                     successfully_trained = self.do(
                         structure.train(unit_type), subtract_cost=True, subtract_supply=True, ignore_warning=True
                     )
+
                     # Check if structure has reactor: queue same unit again
                     if (
                         # Only terran can have reactors
