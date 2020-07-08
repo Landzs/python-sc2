@@ -260,9 +260,10 @@ class TerranResourcesManager:
                     else:
                         closest_mining_place = gas_buildings.closest_to(d)
                     local_workers = self.local_workers(closest_mining_place)
-                    workers_tansfer = min(-difference, workers_to_transfer, local_workers.amount)
-                    [w.gather(d) for w in local_workers[:workers_tansfer]]
-                    workers_to_transfer -= workers_tansfer
+                    if local_workers:
+                        workers_tansfer = min(-difference, workers_to_transfer, local_workers.amount)
+                        [w.gather(d) for w in local_workers[:workers_tansfer]]
+                        workers_to_transfer -= workers_tansfer
 
             pending_refinery = self.__bot.already_pending(UnitTypeId.REFINERY)
             already_transfered = 3 * pending_refinery
