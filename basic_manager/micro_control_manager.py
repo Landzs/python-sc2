@@ -1,9 +1,10 @@
+from sc2 import distances
 from sc2.units import Units
 from sc2.position import Point2
-from sc2.ids.unit_typeid import UnitTypeId
-from sc2.ids.ability_id import AbilityId
 from sc2.ids.buff_id import BuffId
+from sc2.ids.ability_id import AbilityId
 from sc2.ids.upgrade_id import UpgradeId
+from sc2.ids.unit_typeid import UnitTypeId
 
 
 class TerranMicroControlManager():
@@ -12,7 +13,17 @@ class TerranMicroControlManager():
     """
 
     def __init__(self, bot=None):
-        self.bot = bot
+        self.__bot                    = bot
+        self.__micro_cotrol_parameter = {
+            # low_health_retreat: retreat_distance, enemy_units_distance, health_retreat, health_back
+            # attack_enemy_units: enemy_units_distance, kill_workers_first
+            # keep_distance:      enemy_units_distance, retreat_distance
+            # keep_in_range:      ignore_structures, move_to_workers_first
+            UnitTypeId.MARINE       : [0, 0, 0.0, 0.0, 7, False, 4.0, 1, False, False],
+            UnitTypeId.REAPER       : [5, 8, 0.5, 0.8, 5, True, 4.5, 1, False, True],
+            UnitTypeId.MARAUDER     : [0, 0, 0.0, 0.0, 8, False, 5.0, 1, False, False],
+            UnitTypeId.VIKINGFIGHTER: [0, 0, 0.0, 0.0, 8, False, 8.0, 1, False, False],
+        }
 
     async def manage_micro_control(self):
         """
@@ -20,12 +31,9 @@ class TerranMicroControlManager():
         - Including micro control for different units
         """
 
+        await self.units_micro_control()
         await self.SCVs_micro_control()
-        await self.marines_micro_control()
-        await self.reapers_micro_control()
-        await self.marauders_micro_control()
         await self.medivas_micro_control()
-        await self.vikings_micro_control()
 
     def neighbors4(self, unit_position, search_distance=1):
         p = unit_position
@@ -34,7 +42,7 @@ class TerranMicroControlManager():
             Point2((p.x - d, p.y)),
             Point2((p.x + d, p.y)),
             Point2((p.x, p.y - d)),
-            Point2((p.x, p.y + d)),
+            Point2((p.x, p.y + d))
         }
 
     def neighbors8(self, unit_position, search_distance=1):
@@ -44,301 +52,274 @@ class TerranMicroControlManager():
             Point2((p.x - d, p.y - d)),
             Point2((p.x - d, p.y + d)),
             Point2((p.x + d, p.y - d)),
-            Point2((p.x + d, p.y + d)),
+            Point2((p.x + d, p.y + d))
         }
 
-    def retreat(self, unit, distance=1, close_enemies: Units = []):
-        if close_enemies:
+    def retreat(self, unit, distance=1, close_enemy_unit=[]):
+        if close_enemy_unit:
             points = self.neighbors8(unit.position, distance)
             points |= self.neighbors8(unit.position, distance * 2)
-            points = {
-                x
-                for x in points
-                if self.bot.in_pathing_grid(x)
-            }
+            points = {x for x in points if self.__bot.in_pathing_grid(x)}
             if points:
-                closest_enemy = close_enemies.closest_to(unit)
-                point = closest_enemy.position.furthest(points)
+                closest_enemy_unit = close_enemy_unit.closest_to(unit)
+                point = closest_enemy_unit.position.furthest(points)
                 unit.move(point)
 
-    def focus_enemy(self, unit, enemies_in_range):
-        if enemies_in_range:
-            target = min(
-                enemies_in_range,
-                key=lambda e:
-                    (e.health + e.shield) / unit.calculate_dps_vs_target(e)
-            )
-            return target
+    def focus_enemy_units(self, unit, enemy_units_in_range):
+        if enemy_units_in_range:
+            return min(enemy_units_in_range, key=lambda e: (e.health + e.shield) / unit.calculate_dps_vs_target(e))
         else:
             return None
 
     def low_health_retreat(
         self,
         unit,
-        distance=1,
-        enemies_distance: float = 10,
-        health_retreat: float = 2 / 5,
-        health_back: float = 4 / 5
+        retreat_distance: float = 1,
+        enemy_units_distance: float = 10,
+        health_retreat: float = 0.4,
+        health_back: float = 0.8
     ):
-        enemies = self.bot.enemy_units | self.bot.enemy_structures
-        if unit.is_flying:
-            enemies_can_attack = enemies.filter(lambda u: u.can_attack_air)
-        else:
-            enemies_can_attack = enemies.filter(lambda u: u.can_attack_ground)
+        if retreat_distance == 0 or unit.health_percentage >= health_back:
+            return False
 
-        close_enemies = enemies_can_attack.filter(
-            lambda u: u.distance_to(u) < enemies_distance
+        if unit.is_flying:
+            enemy_units_can_attack = self.__bot.enemy_units_attack_air
+            enemy_units_can_attack |= self.__bot.enemy_structures_attack_air
+        else:
+            enemy_units_can_attack = self.__bot.enemy_units_attack_ground
+            enemy_units_can_attack |= self.__bot.enemy_structures_attack_ground
+
+        close_enemy_unit = enemy_units_can_attack.filter(
+            lambda u:
+                u.distance_to(u) < enemy_units_distance
+                and u.type_id not in self.__bot.worker_type_id
         )
-        if (
-            unit.health_percentage < health_retreat
-            and close_enemies
-        ):
-            self.retreat(unit, distance, close_enemies)
-            return True
-        elif (
-            unit.health_percentage < health_back
-            and not close_enemies
-        ):
-            unit.hold_position()
+
+        if unit.health_percentage < health_retreat:
+            if close_enemy_unit:
+                self.retreat(unit, retreat_distance, close_enemy_unit)
+            else:
+                unit.hold_position()
             return True
         else:
             return False
 
-    def attack_enemy(
-        self,
-        unit,
-        enemy_distance,
-    ):
-        enemies = self.bot.enemy_units | self.bot.enemy_structures
-        enemies_to_attack = enemies.filter(
-            lambda u: u.distance_to(unit) <= enemy_distance
-        )
+    def attack_enemy_units(self, unit, enemy_units_distance: float = 0, kill_workers_first: bool = False):
+        enemy_units_to_attack         = self.__bot.enemy_units
+        distance_to_mineral           = self.__bot.enemy_minerals.closest_distance_to(unit)
+        distance_threshold_to_mineral = 5
+
         if not unit.can_attack_both:
             if unit.can_attack_air:
-                enemies_to_attack = enemies_to_attack.filter(
-                    lambda u: u.is_flying
-                )
+                enemy_units_to_attack = self.__bot.enemy_units_air
             elif unit.can_attack_ground:
-                enemies_to_attack = enemies_to_attack.filter(
-                    lambda u: not u.is_flying
-                )
+                enemy_units_to_attack = self.__bot.enemy_units_ground
+        enemy_units_to_attack = enemy_units_to_attack.filter(lambda u: u.type_id not in self.__bot.ignore_type_id)
 
-        if (
-            unit.weapon_cooldown == 0
-            and enemies_to_attack
-        ):
-            focus_enemey = self.focus_enemy(unit, enemies_to_attack)
+        if distance_to_mineral < distance_threshold_to_mineral or not kill_workers_first:
+            structures_to_attack = self.__bot.enemy_structures
+            if not unit.can_attack_both:
+                if unit.can_attack_air:
+                    structures_to_attack = self.__bot.enemy_structures_air
+                elif unit.can_attack_ground:
+                    structures_to_attack = self.__bot.enemy_structures_ground
+            enemy_units_to_attack |= structures_to_attack
+        enemy_units_to_attack = enemy_units_to_attack.filter(lambda u: u.distance_to(unit) <= enemy_units_distance)
+
+        if unit.weapon_cooldown == 0 and enemy_units_to_attack:
+            focus_enemey = self.focus_enemy_units(unit, enemy_units_to_attack)
             if focus_enemey:
                 unit.attack(focus_enemey)
                 return True
         else:
             return False
 
-    def keep_distance(self, unit, enemies_distance, retreat_distance):
-        enemies = self.bot.enemy_units | self.bot.enemy_structures
+    def keep_distance(self, unit, enemy_units_distance, retreat_distance):
+        close_enemy_unit = self.__bot.all_enemy_units
+
         if unit.is_flying:
-            close_enemies = enemies.filter(
-                lambda u:
-                    u.can_attack_air
-                    and u.distance_to(unit) <= enemies_distance
-            )
+            close_enemy_unit = self.__bot.enemy_units_attack_air
         else:
-            close_enemies = enemies.filter(
-                lambda u:
-                    u.can_attack_ground
-                    and u.distance_to(unit) <= enemies_distance
-            )
-        if unit.weapon_cooldown != 0 and close_enemies:
-            self.retreat(unit, retreat_distance, close_enemies)
+            close_enemy_unit = self.__bot.enemy_units_attack_ground
+        close_enemy_unit = close_enemy_unit.filter(
+            lambda u:
+                u.distance_to(unit) <= enemy_units_distance
+                and u.type_id not in self.__bot.ignore_type_id
+        )
+        if unit.weapon_cooldown != 0 and close_enemy_unit:
+            self.retreat(unit, retreat_distance, close_enemy_unit)
             return True
         else:
             return False
 
-    def keep_in_range(self, unit):
-        enemies_to_attack = self.bot.enemy_units
-        structures_to_attack = self.bot.enemy_structures
-        if not unit.can_attack_both:
-            if unit.can_attack_air:
-                enemies_to_attack = enemies_to_attack.filter(
-                    lambda u: u.is_flying
-                )
-                structures_to_attack = structures_to_attack.filter(
-                    lambda u: u.is_flying
-                )
-            elif unit.can_attack_ground:
-                enemies_to_attack = enemies_to_attack.filter(
-                    lambda u: not u.is_flying
-                )
-                structures_to_attack = structures_to_attack.filter(
-                    lambda u: u.is_flying
-                )
-        if enemies_to_attack:
-            closest_enemy = enemies_to_attack.closest_to(unit)
-            unit.attack(closest_enemy.position)
+    def keep_in_range(self, unit, ignore_structures=False, move_to_workers_first=False):
+        enemy_units_minerals          = self.__bot.enemy_minerals
+        distance_to_mineral           = enemy_units_minerals.closest_distance_to(unit)
+        closest_mineral               = enemy_units_minerals.closest_to(unit)
+        enemy_units_to_attack: Units  = Units([], self)
+        enemy_units_in_range: Units   = Units([], self)
+        structures_in_range: Units    = Units([], self)
+        attack_range                  = 0
+        distance_threshold_to_mineral = 6
+
+        if unit.can_attack_air:
+            attack_range          = unit.air_range  + 1
+            enemy_units_in_range  |= self.__bot.enemy_units_air.filter(lambda e: e.distance_to(unit) <= attack_range)
+
+        if unit.can_attack_ground:
+            attack_range          = unit.ground_range + 1
+            enemy_units_in_range  |= self.__bot.enemy_units_ground.filter(lambda e: e.distance_to(unit) <= attack_range)
+
+        structures_in_range   = self.__bot.enemy_structures.filter(lambda e: e.distance_to(unit) <= attack_range)
+        enemy_units_in_range  = enemy_units_in_range.filter(lambda u: u.type_id not in self.__bot.ignore_type_id)
+        enemy_units_to_attack = self.__bot.enemy_units.filter(lambda u: u.type_id not in self.__bot.ignore_type_id)
+
+        if (
+            structures_in_range
+            and not move_to_workers_first
+            or enemy_units_in_range
+        ):
+            return False
+
+        if enemy_units_to_attack:
+            closest_enemy_unit = enemy_units_to_attack.closest_to(unit)
+            keep_range         = unit.air_range - 1 if closest_enemy_unit.is_flying else unit.ground_range - 1
+            position           = closest_enemy_unit.position.towards(unit, keep_range)
+            unit.move(position)
             return True
-        elif structures_to_attack:
-            closest_enemy = structures_to_attack.closest_to(unit)
-            unit.attack(closest_enemy.position)
+        elif (
+            move_to_workers_first
+            and not self.__bot.macro_control_manager.start_searching_phase
+            and distance_to_mineral > distance_threshold_to_mineral
+        ):
+            position = closest_mineral.position.towards(unit, distance_threshold_to_mineral - 2)
+            unit.move(position)
+            return True
+        elif self.__bot.enemy_structures and not ignore_structures:
+            closest_enemy_unit = self.__bot.enemy_structures.closest_to(unit)
+            position           = closest_enemy_unit.position.towards(unit, attack_range)
+            unit.move(closest_enemy_unit.position)
             return True
         else:
             return False
 
     def stimpack(self, unit):
-        enemies_in_range = self.bot.enemy_units.filter(
-            lambda u: u.distance_to(unit) < 7
-        )
+        attack_range          = unit.ground_range
+        enemy_units_to_attack = Units([], self)
+        health_threshold      = 20
 
-        # attack lowest hp enemy if any enemy is in range
+        if unit.can_attack_air:
+            enemy_units_to_attack |= self.__bot.enemy_units_air
+        elif unit.can_attack_ground:
+            enemy_units_to_attack |= self.__bot.enemy_units_ground
+
+        if not enemy_units_to_attack:
+            return False
+
+        enemy_units_to_attack = enemy_units_to_attack.filter(lambda u: u.type_id not in self.__bot.ignore_type_id)
+        enemy_units_in_range  = self.__bot.enemy_units.filter(lambda u: u.distance_to(unit) < attack_range + 2)
         if (
-            enemies_in_range
-            and self.bot.already_pending_upgrade(UpgradeId.STIMPACK) == 1
+            enemy_units_in_range
+            and self.__bot.already_pending_upgrade(UpgradeId.STIMPACK) == 1
             and not unit.has_buff(BuffId.STIMPACK)
-            and unit.health > 10
+            and not unit.has_buff(BuffId.STIMPACKMARAUDER)
+            and unit.health >= health_threshold
         ):
             unit(AbilityId.EFFECT_STIM)
+            return True
+
+    async def grenade(self, unit):
+        grenade_range         = 5
+        enemy_units_to_attack = self.__bot.enemy_units_ground.filter(
+            lambda u:
+                u.type_id not in self.__bot.ignore_type_id
+                and u.distance_to(unit) < grenade_range
+        )
+        if unit.is_attacking or unit.is_moving:
+            abilities = await self.__bot.get_available_abilities(unit)
+            enemy_units_to_attack = enemy_units_to_attack.sorted(lambda x: x.distance_to(unit), reverse=True)
+            furthest_enemy_units = None
+            for enemy_units in enemy_units_to_attack:
+                if await self.__bot.can_cast(
+                    unit,
+                    AbilityId.KD8CHARGE_KD8CHARGE,
+                    enemy_units,
+                    cached_abilities_of_unit=abilities
+                ):
+                    furthest_enemy_units = enemy_units
+                    break
+            if furthest_enemy_units:
+                unit(AbilityId.KD8CHARGE_KD8CHARGE, furthest_enemy_units)
+                return True
+            else:
+                return False
 
     async def SCVs_micro_control(self):
-        for s in self.bot.units(UnitTypeId.SCV).filter(
-            lambda s: s in self.bot.macro_control_manager.SCVs
-        ):
-            # SCV is ready to attack, attack nearest ground unit
-            self.attack_enemy(s, 2)
+        # defense worker rush
+        attack_distance = 2
+        for s in self.__bot.units(UnitTypeId.SCV).filter(lambda s: s in self.__bot.macro_control_manager.SCVs):
+            self.attack_enemy_units(s, attack_distance)
 
-        for s in self.bot.units(UnitTypeId.SCV).filter(
-            lambda s: s.is_collecting or s.is_idle
-        ):
-            self.attack_enemy(s, 1)
-
-        for s in self.bot.units(UnitTypeId.SCV).filter(
+        # move SCVs back when enemy workers leave
+        max_chase_distance = 20
+        for s in self.__bot.units(UnitTypeId.SCV).filter(
             lambda s:
                 s.is_attacking
-                and s.distance_to(self.bot.start_location) >= 20
-                and s not in self.bot.building_manager.proxy_workers
-                and s not in self.bot.macro_control_manager.SCVs
+                and s.distance_to(self.__bot.start_location) >= max_chase_distance
+                and s not in self.__bot.building_manager.proxy_workers
         ):
-            s.move(self.bot.start_location)
+            s.move(self.__bot.start_location)
 
-    async def marines_micro_control(self):
-        for m in self.bot.units(UnitTypeId.MARINE).filter(
-            lambda m:
-                m in self.bot.macro_control_manager.marines
-                or m in self.bot.macro_control_manager.defense_units
-                or m in self.bot.macro_control_manager.combat_unit
-        ):
+        attack_distance = 3
+        for s in self.__bot.units(UnitTypeId.SCV).filter(lambda s: s.is_collecting or s.is_idle):
+            self.attack_enemy_units(s, attack_distance)
+
+    async def units_micro_control(self):
+        for u in self.__bot.units.filter(lambda u: u in self.__bot.macro_control_manager.combat_unit):
+            # unit's health is too low, retreat
+            retreat_distance     = self.__micro_cotrol_parameter[u.type_id][0]
+            enemy_units_distance = self.__micro_cotrol_parameter[u.type_id][1]
+            health_retreat       = self.__micro_cotrol_parameter[u.type_id][2]
+            health_back          = self.__micro_cotrol_parameter[u.type_id][3]
+            if self.low_health_retreat(u, retreat_distance, enemy_units_distance, health_retreat, health_back):
+                continue
+
             # stimpack
-            self.stimpack(m)
-
-            # marine is ready to attack, shoot nearest ground unit
-            if self.attack_enemy(m, 6):
+            if (u.type_id == UnitTypeId.MARAUDER or UnitTypeId.MARINE) and self.stimpack(u):
                 continue
 
-            # move to max unit range if enemy is closer than 4
-            if self.keep_distance(m, 4.5, 1):
+            # throw grenade to furthest enemy_units in range 5
+            if u.type_id == UnitTypeId.REAPER and await self.grenade(u):
                 continue
 
-            # move to nearest enemy to keep in range of weapon
-            if self.keep_in_range(m):
+            # unit is ready to attack, shoot nearest ground unit
+            enemy_units_distance = self.__micro_cotrol_parameter[u.type_id][4]
+            kill_workers_first   = self.__micro_cotrol_parameter[u.type_id][5]
+            if self.attack_enemy_units(u, enemy_units_distance, kill_workers_first):
                 continue
 
-    async def reapers_micro_control(self):
-        for r in self.bot.units(UnitTypeId.REAPER).filter(
-            lambda r:
-                r in self.bot.macro_control_manager.reapers
-                or r in self.bot.macro_control_manager.defense_units
-                or r in self.bot.macro_control_manager.combat_unit
-        ):
-            # reaper's health is too low, retreat
-            if self.low_health_retreat(r, 4, 10, 2 / 5, 4 / 5):
+            # move to max unit range if enemy_units is closer than specific distance
+            enemy_units_distance = self.__micro_cotrol_parameter[u.type_id][6]
+            retreat_distance     = self.__micro_cotrol_parameter[u.type_id][7]
+            if self.keep_distance(u, enemy_units_distance, retreat_distance):
                 continue
 
-            # throw grenade to furthest enemy in range 5
-            grenade_range = self.bot._game_data.abilities[
-                AbilityId.KD8CHARGE_KD8CHARGE.value
-            ]._proto.cast_range
-
-            enemies = self.bot.enemy_units | self.bot.enemy_structures
-            enemies_can_attack = enemies.filter(lambda u: u.can_attack_ground)
-            enemies_to_attack = enemies_can_attack.filter(
-                lambda u:
-                not u.is_structure
-                and not u.is_flying
-                and u.type_id not in {UnitTypeId.LARVA, UnitTypeId.EGG}
-                and u.distance_to(r) < grenade_range
-            )
-            if (
-                grenade_range
-                and (
-                    r.is_attacking
-                    or r.is_moving
-                )
-            ):
-                abilities = await self.bot.get_available_abilities(r)
-                enemies_to_attack = enemies_to_attack.sorted(
-                    lambda x: x.distance_to(r), reverse=True
-                )
-                furthest_enemy = None
-                for enemy in enemies_to_attack:
-                    if await self.bot.can_cast(
-                        r,
-                        AbilityId.KD8CHARGE_KD8CHARGE,
-                        enemy,
-                        cached_abilities_of_unit=abilities
-                    ):
-                        furthest_enemy = enemy
-                        break
-                if furthest_enemy:
-                    r(AbilityId.KD8CHARGE_KD8CHARGE, furthest_enemy)
-                    continue
-
-            # reaper is ready to attack, shoot nearest ground unit
-            if self.attack_enemy(r, 5):
-                continue
-            # move to max unit range if enemy is closer than 4
-            if self.keep_distance(r, 4.5, 1):
-                continue
-
-            # move to nearest enemy to keep in range of weapon
-            if self.keep_in_range(r):
-                continue
-
-    async def marauders_micro_control(self):
-        for m in self.bot.units(UnitTypeId.MARAUDER).filter(
-            lambda m:
-                m in self.bot.macro_control_manager.marauders
-                or m in self.bot.macro_control_manager.defense_units
-                or m in self.bot.macro_control_manager.combat_unit
-        ):
-            # stimpack
-            self.stimpack(m)
-
-            # marauder is ready to attack, shoot nearest ground unit
-            if self.attack_enemy(m, 7):
-                continue
-
-            # move to max unit range if enemy is closer than 4
-            if self.keep_distance(m, 5, 0.5):
-                continue
-
-            # move to nearest enemy to keep in range of weapon
-            if self.keep_in_range(m):
-                continue
+            # move to nearest enemy_units to keep in range of weapon
+            ignore_structures     = self.__micro_cotrol_parameter[u.type_id][8]
+            move_to_workers_first = self.__micro_cotrol_parameter[u.type_id][9]
+            if u in self.__bot.macro_control_manager.defense_units:
+                self.keep_in_range(u, True, move_to_workers_first)
+            else:
+                self.keep_in_range(u, ignore_structures, move_to_workers_first)
 
     async def medivas_micro_control(self):
-        for m in self.bot.units(UnitTypeId.MEDIVAC):
-            unhealth_unit = self.bot.units.filter(
-                lambda u:
-                    u.health_percentage < 1
-                    and u.is_biological
-            )
-            unit_in_range = unhealth_unit.filter(
-                lambda u: u.distance_to(m) < 10
-            )
+        for m in self.__bot.units(UnitTypeId.MEDIVAC):
+            distance_threshold = 10
+            unhealth_unit = self.__bot.units.filter(lambda u: u.health_percentage < 1 and u.is_biological)
+            unit_in_range = unhealth_unit.filter(lambda u: u.distance_to(m) < distance_threshold)
 
             # heal unit has lowest health
-            unit_in_range = sorted(
-                unit_in_range,
-                key=lambda u: u.health
-            )
+            unit_in_range = sorted(unit_in_range, key=lambda u: u.health)
             if unit_in_range:
                 m(AbilityId.MEDIVACHEAL_HEAL, unit_in_range[0])
                 continue
@@ -347,30 +328,11 @@ class TerranMicroControlManager():
             if unhealth_unit:
                 m.move(unhealth_unit.closest_to(m).position)
             else:
-                combat_unit = self.bot.units.filter(
+                combat_unit = self.__bot.units.filter(
                     lambda u:
-                        u not in self.bot.workers
-                        and u not in self.bot.units(UnitTypeId.MULE)
+                        u not in self.__bot.workers
+                        and u not in self.__bot.units(UnitTypeId.MULE)
                         and u.is_biological
                 )
                 if combat_unit:
                     m.move(combat_unit.closest_to(m).position)
-
-    async def vikings_micro_control(self):
-        for v in self.bot.units(UnitTypeId.VIKINGFIGHTER).filter(
-            lambda v:
-                v in self.bot.macro_control_manager.vikings
-                or v in self.bot.macro_control_manager.defense_units
-                or v in self.bot.macro_control_manager.combat_unit
-        ):
-            # viking is ready to attack, shoot nearest ground unit
-            if self.attack_enemy(v, 10):
-                continue
-
-            # move to max unit range if enemy is closer than 4
-            if self.keep_distance(v, 4.5, 2):
-                continue
-
-            # move to nearest enemy to keep in range of weapon
-            if self.keep_in_range(v):
-                continue
