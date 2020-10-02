@@ -59,8 +59,8 @@ class TerranStrategyManager():
         if (
             self.__bot.macro_control_manager.close_enemy_units
             and self.__bot.macro_control_manager.closest_distance < 90
-            and all(e.type_id in self.__bot.worker_typeid for e in self.__bot.enemy_units)
-            and all(o.type_id in self.__bot.worker_typeid for o in self.__bot.units)
+            and all(e.type_id in self.__bot.worker_type_id for e in self.__bot.enemy_units)
+            and all(o.type_id in self.__bot.worker_type_id for o in self.__bot.units)
             and len(self.__bot.macro_control_manager.close_enemy_units) >= 3
         ):
             self.__bot.phase_manager.switch_to_phase("Defense Worker Rush")
@@ -97,7 +97,8 @@ class TerranStrategyManager():
 
     async def __search_remain_enemies(self):
         if (
-            self.__bot.units.closest_distance_to(self.__bot.macro_control_manager.attack_target) < 5
+            self.__bot.units 
+            and self.__bot.units.closest_distance_to(self.__bot.macro_control_manager.attack_target) < 5
             and not self.__bot.enemy_units_ground
         ):
             self.__bot.phase_manager.switch_to_phase("Search Enemies")

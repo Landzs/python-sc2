@@ -15,6 +15,7 @@ class TerranResourcesManager:
         self.__SCVs_amount_limit  = 60
         self.__bases_amount_limit = 3
         self.__resource_ratio     = 100
+        self.__newly_expanded_position  = Point2((0, 0))
 
     async def manage_resources(self, iteration):
         """
@@ -52,7 +53,7 @@ class TerranResourcesManager:
         ):
             position = await self.__bot.get_next_expansion()
             if position:
-                self.__bot.macro_control_manager.expanded_position = position
+                self.__newly_expanded_position = position
             await self.__bot.expand_now()
 
     async def __build_refinery(self):
@@ -302,6 +303,10 @@ class TerranResourcesManager:
     @property
     def resource_ratio(self):
         return self.__resource_ratio
+    
+    @property
+    def newly_expanded_position(self):
+        return self.__newly_expanded_position
 
     @SCVs_amount_limit.setter
     def SCVs_amount_limit(self, value: int):

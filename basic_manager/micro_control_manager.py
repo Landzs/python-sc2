@@ -1,4 +1,3 @@
-from sc2 import distances
 from sc2.units import Units
 from sc2.position import Point2
 from sc2.ids.buff_id import BuffId
@@ -275,7 +274,8 @@ class TerranMicroControlManager():
             self.attack_enemy_units(s, attack_distance)
 
     async def units_micro_control(self):
-        for u in self.__bot.units.filter(lambda u: u in self.__bot.macro_control_manager.combat_unit):
+        combat_units = self.__bot.macro_control_manager.attack_units | self.__bot.macro_control_manager.defense_units
+        for u in self.__bot.units.filter(lambda u: u in combat_units):
             # unit's health is too low, retreat
             retreat_distance     = self.__micro_cotrol_parameter[u.type_id][0]
             enemy_units_distance = self.__micro_cotrol_parameter[u.type_id][1]
